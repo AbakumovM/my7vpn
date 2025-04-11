@@ -183,8 +183,8 @@ async def set_tariff_callback(call: types.CallbackQuery, state: FSMContext):
 
     tariff = call.data.split(":")[1]
     period = call.data.split(":")[2]
-    payment = 0 if int(tariff) - balance <= 0 else int(tariff) - balance
-    balance = 0 if balance - int(tariff) <= 0 else balance - int(tariff)
+    payment = max(int(tariff) - balance, 0)
+    balance = max(balance - int(tariff), 0)
     await state.update_data(
         tariff=tariff, period=period, payment=payment, balance=balance
     )

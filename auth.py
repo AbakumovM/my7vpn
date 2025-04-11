@@ -20,7 +20,7 @@ async def get_or_create_user(telegram_id: int, referral_by: int = None):
             if not user:
                 referral = generate_referral_code(telegram_id)
                 # free_month = True if referral_by else False
-                referral_by_inbd = referral_by if referral_by else None
+                referral_by_inbd = referral_by or None
                 user = User(
                     telegram_id=telegram_id,
                     referral_code=referral,
@@ -37,7 +37,7 @@ async def get_user(telegram_id: int):
             select(User).where(User.telegram_id == telegram_id)
         )
         user = result.scalars().first()
-        return user if user else None
+        return user or None
 
 
 async def create_vpn(
@@ -62,7 +62,7 @@ async def create_vpn(
                 device_name = (
                     f"{device} {str(device_id_last + 1)}{random.randint(1, 5000)}"
                     if device_id_last
-                    else f"{device} {1}{random.randint(1, 5000)}"
+                    else f"{device} 1{random.randint(1, 5000)}"
                 )
                 device = Device(user_id=user.id, device_name=device_name)
                 session.add(device)
@@ -81,7 +81,7 @@ async def create_vpn(
                 logger.info(f"Subscription created: {sub}")
 
                 pay = Payment(
-                    subscription_id=sub.id, amount=int(tariff) if not free_month else 0
+                    subscription_id=sub.id, amount=0 if free_month else int(tariff)
                 )
                 session.add(pay)
                 await session.commit()
@@ -102,8 +102,7 @@ async def get_devices_users(telegram_id: int):
             result = await session.execute(
                 select(Device).where(Device.user_id == user.id)
             )
-            devices = result.scalars().all()
-            return devices
+            return result.scalars().all()
     except Exception as e:
         logger.error(f"Error get devices for user {user.id}: {e}")
         raise
@@ -134,8 +133,7 @@ async def get_count_device_for_user(telegram_id: int):
             result_dev = await session.execute(
                 select(func.count(Device.id)).where(Device.user_id == user.id)
             )
-            devices = result_dev.scalar()
-            return devices
+            return result_dev.scalar()
     except Exception as e:
         logger.error(f"Error get devices: {e}")
         raise
@@ -185,9 +183,7 @@ async def get_referral_by_id(referral: str):
             user = await session.scalar(
                 select(User).where(User.referral_code == referral)
             )
-            if user:
-                return user.telegram_id
-            return None
+            return user.telegram_id if user else None
         except Exception as e:
             logger.error(f"Error get referral by id: {e}")
             raise
