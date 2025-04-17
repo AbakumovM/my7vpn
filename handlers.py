@@ -147,7 +147,7 @@ async def set_free_device_comp(call: types.CallbackQuery, bot: Bot, state: FSMCo
         reply_markup=return_start(),
     )
     await bot.send_message(
-        chat_id=ADMIN_ID, text=bot_repl.get_message_new_user_referral()
+        chat_id=data['referral_by'], text=bot_repl.get_message_new_user_referral()
     )
     await state.clear()
 
