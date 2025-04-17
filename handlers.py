@@ -180,7 +180,7 @@ async def set_device_comp(call: types.CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("tariff"))
 async def set_tariff_callback(call: types.CallbackQuery, state: FSMContext):
     balance = await get_balance_user(call.from_user.id)
-
+    await call.message.delete()
     tariff = call.data.split(":")[1]
     period = call.data.split(":")[2]
     payment = max(int(tariff) - balance, 0)
@@ -199,7 +199,7 @@ async def set_finally_vpn(call: types.CallbackQuery, state: FSMContext, bot: Bot
     answer = call.data.split(":")[1]
     if answer in "Да":
         try:
-
+            await call.message.delete()
             file_date = await get_photo_for_pay()
             photo = BufferedInputFile(file_date, filename="qr_payment.jpeg")
             data = await state.get_data()
@@ -211,7 +211,6 @@ async def set_finally_vpn(call: types.CallbackQuery, state: FSMContext, bot: Bot
                 reply_markup=get_keyboard_approve_payment_or_cancel(),
             )
         except Exception as e:
-            print(e)
             await call.message.answer(f"Произошла ошибка, попробуйте еще раз: {e}")
             await state.clear()
     else:
@@ -230,9 +229,10 @@ async def success_payment_answer(
         result = await create_vpn(
             call.from_user.id, data["device"], data["period"], data["tariff"]
         )
+        await call.message.delete()
         await call.message.answer(
-            text="Спасибо! Ваша оплата принята. Специалист свяжется с вами для дальнейшего подключения.",
-            reply_markup=return_start(),
+            text=bot_repl.get_message_success_payment(),
+            reply_markup=return_start()
         )
         await bot.send_message(
             chat_id=ADMIN_ID,
