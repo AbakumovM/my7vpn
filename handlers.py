@@ -124,7 +124,7 @@ async def get_start_free_month(call: types.CallbackQuery, bot: Bot, state: FSMCo
             bot_repl.get_message_success_free_month(device), reply_markup=return_start()
         )
         await bot.send_message(
-            chat_id=ADMIN_ID, text=bot_repl.get_message_new_user_referral()
+            chat_id=data["referral_by"], text=bot_repl.get_message_new_user_referral()
         )
         await state.clear()
 
