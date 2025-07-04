@@ -152,12 +152,10 @@ async def get_full_info_device(device_id: int):
                 .join(Subscription, Device.id == Subscription.device_id)
                 .join(Payment, Subscription.id == Payment.subscription_id)
                 .where(
-                    and_(
-                        Device.id == device_id,
-                        Subscription.end_date > datetime.now(timezone.utc),
+                        Device.id == device_id
                     )
                 )
-            )
+            
 
             result = await session.execute(query)
             data = result.first()
