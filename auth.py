@@ -75,6 +75,7 @@ async def create_vpn(
                 sub = Subscription(
                     device_id=device.id,
                     plan=int(period),
+                    start_date=datetime.now(timezone.utc),
                     end_date=datetime.now(timezone.utc)
                     + relativedelta(months=int(period)),
                 )
@@ -83,7 +84,7 @@ async def create_vpn(
                 logger.info(f"Subscription created: {sub}")
 
                 pay = Payment(
-                    subscription_id=sub.id, amount=0 if free_month else int(tariff)
+                    subscription_id=sub.id, amount=0 if free_month else int(tariff), payment_date=datetime.now(timezone.utc)
                 )
                 session.add(pay)
                 await session.commit()
