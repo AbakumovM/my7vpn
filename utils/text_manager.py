@@ -58,7 +58,6 @@ class TextManager:
         end_date = data["end_date"]
         amount = data["amount"]
         payment_date = data["payment_date"]
-        flag = False
         message = (
             f"📱 <b>Информация об устройстве:</b> {device_name}\n\n"
             f"🗓 <b>Дата окончания подписки:</b> {end_date}\n"
@@ -70,11 +69,12 @@ class TextManager:
 
         if end_date:
             end_date_obj = datetime.strptime(end_date, "%d.%m.%Y")
+            print(end_date_obj, datetime.now(), (end_date_obj - datetime.now()).days)
             if (end_date_obj - datetime.now()).days <= 7:
                 message += "\n\n⚠️ <b>Внимание! Ваша подписка истекает через несколько дней. Не забудьте продлить её.</b>"
                 flag = True
 
-        return message, flag
+        return message, device_name
 
     @staticmethod
     def get_approve_payment(amount, payment_link, balance):
@@ -240,6 +240,12 @@ class TextManager:
             "<b>‼️ВАЖНО! Проверьте, чтоб у вас было указано 'Имя пользователя' в настройках\n"
             "В противном случае наш админ не сможет вам написать</b>\n\n"
             '📌 Пока вы можете перейти в раздел <b>/help</b> и выполнить шаги из инструкции для вашего устройства.'    
+        )
+    @staticmethod
+    def get_message_success_payment_update():
+        return (
+            '💳 <b>Спасибо! Ваша оплата принята.</b>\n\n'
+            '🔹 Подписка продлена!\n\n'   
         )
 
 bot_repl = TextManager()

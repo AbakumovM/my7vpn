@@ -9,15 +9,18 @@ from utils.states import RegisterVpn
 from utils.text_manager import bot_repl
 from utils.keyboards import (
     get_keyboard_approve_payment_or_cancel,
+    get_keyboard_approve_payment_or_cancel_for_update,
     get_keyboard_devices,
     get_keyboard_devices_for_del,
     get_keyboard_for_details_device,
     get_keyboard_help,
     get_keyboard_start,
     get_keyboard_tariff,
+    get_keyboard_tariff_for_update,
     get_keyboard_type_comp,
     get_keyboard_type_device,
     get_keyboard_yes_or_no,
+    get_keyboard_yes_or_no_for_update,
     return_start,
 )
 from aiogram.fsm.context import FSMContext
@@ -33,6 +36,7 @@ from auth import (
     get_referral_by_id,
     get_referral_code,
     update_balance_user,
+    update_tariff_from_device,
 )
 from dotenv import load_dotenv
 
@@ -104,23 +108,23 @@ async def get_start_callback(call: types.CallbackQuery):
 async def get_start_free_month(call: types.CallbackQuery, bot: Bot, state: FSMContext):
     device = call.data.split(":")[1]
     if device in "Компьютер":
-        await call.message.answer(
+        await call.message.edit_text(
             "Пожалуйста, выберите тип компьютера, для которого вы хотите использовать эти настройки:",
             reply_markup=get_keyboard_type_comp("free_device"),
         )
     else:
         data = await state.get_data()
-        await create_vpn(telegram_id=call.from_user.id, device=device, free_month=True)
+        result = await create_vpn(telegram_id=call.from_user.id, device=device, free_month=True)
         await bot.send_message(
             chat_id=ADMIN_ID,
             text=f"Пользователь хочет подключить VPN по реферальной ссылке!\n"
             f"👤 Имя: {call.from_user.username}\n"
             f"🆔 ID: {call.from_user.id}\n"
             f"🆔 Кто пригласил: {data['referral_by']}"
-            f"📋 Критерии: девайс {device}",
+            f"📋 Критерии: девайс {device}, {result[0]}",
         )
         await update_balance_user(data["referral_by"], amount=50, referral=True)
-        await call.message.answer(
+        await call.message.edit_text(
             bot_repl.get_message_success_free_month(device), reply_markup=return_start()
         )
         await bot.send_message(
@@ -142,7 +146,7 @@ async def set_free_device_comp(call: types.CallbackQuery, bot: Bot, state: FSMCo
         f"🆔 Кто пригласил: {data['referral_by']}"
         f"📋 Критерии: девайс {type_device}",
     )
-    await call.message.answer(
+    await call.message.edit_text(
         bot_repl.get_message_success_free_month(type_device),
         reply_markup=return_start(),
     )
@@ -329,10 +333,11 @@ async def add_device_for_user(call: types.CallbackQuery, state: FSMContext):
 async def conf_device_for_user(call: types.CallbackQuery):
     device_id = int(call.data.split(":")[1])
     result = await get_full_info_device(device_id)
-    text, flag = bot_repl.generate_device_info_message(result)
+    text, device_name = bot_repl.generate_device_info_message(result)
     await call.message.answer(
-        text=text, reply_markup=get_keyboard_for_details_device(flag)
+        text=text, reply_markup=get_keyboard_for_details_device(device_name)
     )
+    
 
 
 @router.callback_query(F.data.startswith("error"))
@@ -400,3 +405,77 @@ async def invite_user(msg: types.Message):
         bot_repl.get_message_invite_friend(referral_code),
         reply_markup=get_keyboard_start(),
     )
+
+@router.callback_query(F.data.startswith('up_'))
+async def update_device(call: types.CallbackQuery, state: FSMContext):
+    device_name = call.data.split(':')[1]
+    print(device_name)
+    await state.update_data(device=device_name)
+    await call.message.answer(
+            "Выберете тариф, который хотите подключить:",
+            reply_markup=get_keyboard_tariff_for_update(),
+        )
+
+@router.callback_query(F.data.startswith('uptar'))
+async def update_finally(call: types.CallbackQuery, state: FSMContext):
+    balance = await get_balance_user(call.from_user.id)
+    await call.message.delete()
+    tariff = call.data.split(":")[1]
+    period = call.data.split(":")[2]
+    payment = max(int(tariff) - balance, 0)
+    balance = max(balance - int(tariff), 0)
+    await state.update_data(
+        tariff=tariff, period=period, payment=payment, balance=balance
+    )
+    data = await state.get_data()
+    await call.message.answer(
+        bot_repl.get_full_info_payment(data), reply_markup=get_keyboard_yes_or_no_for_update())
+    
+@router.callback_query(F.data.startswith('reup_finally'))
+async def update_payment(call: types.CallbackQuery, state: FSMContext):
+    answer = call.data.split(":")[1]
+    if answer in "Да":
+        try:
+            await call.message.delete()
+            file_date = await get_photo_for_pay()
+            photo = BufferedInputFile(file_date, filename="qr_payment.jpeg")
+            data = await state.get_data()
+            await call.message.answer_photo(
+                photo=photo,
+                caption=bot_repl.get_approve_payment(
+                    amount=data["payment"], balance=data["balance"], payment_link=LINK
+                ),
+                reply_markup=get_keyboard_approve_payment_or_cancel_for_update(),
+            )
+        except Exception as e:
+            await call.message.answer(f"Произошла ошибка, попробуйте еще раз: {e}")
+            await state.clear()
+    else:
+        await state.clear()
+        await call.message.answer(
+            "Давай еще раз начнем с начала", reply_markup=get_keyboard_type_device()
+        )
+
+@router.callback_query(F.data.startswith('fup_success'))
+async def hand_update_tariff_from_device(call: types.CallbackQuery, state: FSMContext, bot: Bot):
+    try:
+        data = await state.get_data()
+        result = await update_tariff_from_device(
+            data["device"], data["tariff"],data["period"], data['payment']
+        )
+        await call.message.delete()
+        await call.message.answer(
+            text=bot_repl.get_message_success_payment_update(),
+            reply_markup=return_start()
+        )
+        await bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"Пользователь продлил подписку VPN!\n"
+            f"👤 Имя: {call.from_user.username}\n"
+            f"🆔 ID: {call.from_user.id}\n"
+            f"📋 Критерии: девайс {data["device"]}, срок {data["period"]}, тариф {data['tariff']}, сколько оплатил {data['payment']}",
+        )
+        await update_balance_user(call.from_user.id, amount=data["balance"])
+    except Exception as e:
+        await call.message.answer(f"Произошла ошибка, попробуйте еще раз ! {e}")
+        await state.clear()

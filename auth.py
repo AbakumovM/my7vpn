@@ -4,6 +4,8 @@ from db import AsyncSessionLocal, Device, Subscription, User, Payment
 from dateutil.relativedelta import relativedelta
 import logging
 import random
+from sqlalchemy.orm import joinedload
+
 
 from utils.utl import generate_referral_code
 
@@ -241,3 +243,39 @@ async def update_balance_user(telegram_id: int, amount: int, referral: bool = Fa
         except Exception as e:
             logger.error(f"Error set balance user: {e}")
             raise
+
+async def update_tariff_from_device(device_name, tariff, period, payment):
+    async with AsyncSessionLocal() as session:
+
+        query = (
+            select(Device)
+            .options(
+                joinedload(Device.subscription).joinedload(Subscription.payments)  # Загружаем связи
+            )
+            .where(Device.device_name == device_name)
+        )
+        result = await session.execute(query)
+        device = result.scalars().first()
+        print(period)
+        print(device.subscription.end_date)
+        print(device.subscription.end_date + relativedelta(months=int(period)))
+        
+        
+        if device:
+            # Обновляем Subscription
+            if device.subscription:
+                device.subscription.end_date = device.subscription.end_date + relativedelta(months=int(period))
+                device.subscription.plan = int(period)
+                device.subscription.start_date = datetime.now(timezone.utc)
+                
+                # Обновляем Payment
+                if device.subscription.payments:
+                    device.subscription.payments.amount = int(payment)
+                    device.subscription.payments.payment_date = datetime.now(timezone.utc)
+        
+
+            await session.commit()
+            return True
+
+
+        return False
