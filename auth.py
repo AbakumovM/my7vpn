@@ -265,7 +265,8 @@ async def update_tariff_from_device(device_name, tariff, period, payment):
         if device:
             # Обновляем Subscription
             if device.subscription:
-                device.subscription.end_date = device.subscription.end_date + relativedelta(months=int(period))
+                end_date = datetime.now(timezone.utc) + relativedelta(months=int(period)) if device.subscription.end_date < datetime.now(timezone.utc) else device.subscription.end_date + relativedelta(months=int(period))
+                device.subscription.end_date = end_date
                 device.subscription.plan = int(period)
                 device.subscription.start_date = datetime.now(timezone.utc)
                 
