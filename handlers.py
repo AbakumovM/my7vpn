@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import os
 from aiogram import Router
 from aiogram import types, F, Router
@@ -25,20 +26,26 @@ from utils.keyboards import (
 )
 from aiogram.fsm.context import FSMContext
 from aiogram import Bot
-from auth import (
+from database.db_service import (
     create_vpn,
-    del_device,
+    get_referral_by_id,
+    get_referral_code,
+)
+from database.user_service import (
     get_balance_user,
+    get_or_create_user,
+    update_balance_user,
+)
+from database.device_service import (
+    del_device,
     get_count_device_for_user,
     get_devices_users,
     get_full_info_device,
-    get_or_create_user,
-    get_referral_by_id,
-    get_referral_code,
-    update_balance_user,
     update_tariff_from_device,
 )
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 
 load_dotenv(".env")
@@ -98,10 +105,10 @@ async def get_start_callback(call: types.CallbackQuery):
             reply_markup=get_keyboard_start(),
         )
     except Exception as e:
+        logger.error(f'Произошла ошибка в функции get_start_callback: {e}')
         await call.message.edit_text(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
-        
 
 
 @router.callback_query(F.data.startswith("free_set_device"))
@@ -114,7 +121,9 @@ async def get_start_free_month(call: types.CallbackQuery, bot: Bot, state: FSMCo
         )
     else:
         data = await state.get_data()
-        result = await create_vpn(telegram_id=call.from_user.id, device=device, free_month=True)
+        result = await create_vpn(
+            telegram_id=call.from_user.id, device=device, free_month=True
+        )
         await bot.send_message(
             chat_id=ADMIN_ID,
             text=f"Пользователь хочет подключить VPN по реферальной ссылке!\n"
@@ -131,6 +140,7 @@ async def get_start_free_month(call: types.CallbackQuery, bot: Bot, state: FSMCo
             chat_id=data["referral_by"], text=bot_repl.get_message_new_user_referral()
         )
         await state.clear()
+        logger.info(f'Пользователь {call.from_user.id} успешно подключил VPN по реферальной ссылки от {data["referral_by"]}')
 
 
 @router.callback_query(F.data.startswith("free_device"))
@@ -151,8 +161,9 @@ async def set_free_device_comp(call: types.CallbackQuery, bot: Bot, state: FSMCo
         reply_markup=return_start(),
     )
     await bot.send_message(
-        chat_id=data['referral_by'], text=bot_repl.get_message_new_user_referral()
+        chat_id=data["referral_by"], text=bot_repl.get_message_new_user_referral()
     )
+    logger.info(f'Пользователь {call.from_user.id} успешно подключил VPN по реферальной ссылки от {data["referral_by"]}')
     await state.clear()
 
 
@@ -215,7 +226,8 @@ async def set_finally_vpn(call: types.CallbackQuery, state: FSMContext, bot: Bot
                 reply_markup=get_keyboard_approve_payment_or_cancel(),
             )
         except Exception as e:
-            await call.message.answer(f"Произошла ошибка, попробуйте еще раз: {e}")
+            logger.error(f'Произошла ошибка в функции set_finally_vpn, id {call.from_user.id}: {e}')
+            await call.message.answer("Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin.")
             await state.clear()
     else:
         await state.clear()
@@ -235,8 +247,7 @@ async def success_payment_answer(
         )
         await call.message.delete()
         await call.message.answer(
-            text=bot_repl.get_message_success_payment(),
-            reply_markup=return_start()
+            text=bot_repl.get_message_success_payment(), reply_markup=return_start()
         )
         await bot.send_message(
             chat_id=ADMIN_ID,
@@ -246,8 +257,10 @@ async def success_payment_answer(
             f"📋 Критерии: девайс {result[0]}, срок {data["period"]}, тариф {data['tariff']}, сколько оплатил {data['payment']}",
         )
         await update_balance_user(call.from_user.id, amount=data["balance"])
+        logger.info(f'Пользователь {call.from_user.id} успешно создал и оплатил подписку')
     except Exception as e:
-        await call.message.answer(f"Произошла ошибка, попробуйте еще раз ! {e}")
+        logger.error(f'Произошла ошибка в функции success_payment_answer, id {call.from_user.id}: {e}')
+        await call.message.answer("Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin.")
         await state.clear()
 
 
@@ -265,7 +278,8 @@ async def get_devices(msg: types.Message):
                 "У вас нет активных устройств", reply_markup=get_keyboard_start()
             )
     except Exception as e:
-        await msg.message.answer("Произошла ошибка, попробуйте еще раз")
+        logger.error(f'Произошла ошибка в функции get_devices, id {msg.from_user.id}: {e}')
+        await msg.message.answer( "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin.")
 
 
 @router.callback_query(F.data.startswith("mydevices"))
@@ -280,6 +294,7 @@ async def handle_my_devices_callback(call: types.CallbackQuery):
         else:
             await call.message.answer("У вас нет активных устройств")
     except Exception as e:
+        logger.error(f'Произошла ошибка в функции handle_my_devices_callback, id {call.from_user.id}: {e}')
         await call.message.answer(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -297,6 +312,7 @@ async def delete_device(call: types.CallbackQuery):
             "Какое устройство вы хотите отключить?", reply_markup=keyboard
         )
     except Exception as e:
+        logger.error(f'Произошла ошибка в функции delete_device, id {call.from_user.id}: {e}')
         await call.message.answer(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -315,7 +331,9 @@ async def del_device_approve(call: types.CallbackQuery, bot: Bot):
             f"🆔 ID: {call.from_user.id}\n"
             f"📋 Девайс: {result}",
         )
+        logger.info(f'Пользователь {call.from_user.id} удалил у себя устройство {result}.')
     except Exception as e:
+        logger.error(f'Произошла ошибка в функции del_device_approve, id {call.from_user.id}: {e}')
         await call.message.edit_text(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -337,7 +355,6 @@ async def conf_device_for_user(call: types.CallbackQuery):
     await call.message.answer(
         text=text, reply_markup=get_keyboard_for_details_device(device_name)
     )
-    
 
 
 @router.callback_query(F.data.startswith("error"))
@@ -352,6 +369,7 @@ async def error_help_user(call: types.CallbackQuery):
         else:
             await call.message.answer("У вас нет активных устройств")
     except Exception as e:
+        logger.error(f'Произошла ошибка в функции error_help_user, id {call.from_user.id}: {e}')
         await call.message.answer(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -406,17 +424,18 @@ async def invite_user(msg: types.Message):
         reply_markup=get_keyboard_start(),
     )
 
-@router.callback_query(F.data.startswith('up_'))
+
+@router.callback_query(F.data.startswith("up_"))
 async def update_device(call: types.CallbackQuery, state: FSMContext):
-    device_name = call.data.split(':')[1]
-    print(device_name)
+    device_name = call.data.split(":")[1]
     await state.update_data(device=device_name)
     await call.message.answer(
-            "Выберете тариф, который хотите подключить:",
-            reply_markup=get_keyboard_tariff_for_update(),
-        )
+        "Выберете тариф, который хотите подключить:",
+        reply_markup=get_keyboard_tariff_for_update(),
+    )
 
-@router.callback_query(F.data.startswith('uptar'))
+
+@router.callback_query(F.data.startswith("uptar"))
 async def update_finally(call: types.CallbackQuery, state: FSMContext):
     balance = await get_balance_user(call.from_user.id)
     await call.message.delete()
@@ -429,9 +448,12 @@ async def update_finally(call: types.CallbackQuery, state: FSMContext):
     )
     data = await state.get_data()
     await call.message.answer(
-        bot_repl.get_full_info_payment(data), reply_markup=get_keyboard_yes_or_no_for_update())
-    
-@router.callback_query(F.data.startswith('reup_finally'))
+        bot_repl.get_full_info_payment(data),
+        reply_markup=get_keyboard_yes_or_no_for_update(),
+    )
+
+
+@router.callback_query(F.data.startswith("reup_finally"))
 async def update_payment(call: types.CallbackQuery, state: FSMContext):
     answer = call.data.split(":")[1]
     if answer in "Да":
@@ -448,7 +470,10 @@ async def update_payment(call: types.CallbackQuery, state: FSMContext):
                 reply_markup=get_keyboard_approve_payment_or_cancel_for_update(),
             )
         except Exception as e:
-            await call.message.answer(f"Произошла ошибка, попробуйте еще раз: {e}")
+            logger.error(f'Произошла ошибка в функции update_payment, id {call.from_user.id}: {e}')
+            await call.message.answer(
+            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
+            )
             await state.clear()
     else:
         await state.clear()
@@ -456,17 +481,20 @@ async def update_payment(call: types.CallbackQuery, state: FSMContext):
             "Давай еще раз начнем с начала", reply_markup=get_keyboard_type_device()
         )
 
-@router.callback_query(F.data.startswith('fup_success'))
-async def hand_update_tariff_from_device(call: types.CallbackQuery, state: FSMContext, bot: Bot):
+
+@router.callback_query(F.data.startswith("fup_success"))
+async def hand_update_tariff_from_device(
+    call: types.CallbackQuery, state: FSMContext, bot: Bot
+):
     try:
         data = await state.get_data()
         result = await update_tariff_from_device(
-            data["device"], data["tariff"],data["period"], data['payment']
+            data["device"], data["tariff"], data["period"], data["payment"]
         )
         await call.message.delete()
         await call.message.answer(
             text=bot_repl.get_message_success_payment_update(),
-            reply_markup=return_start()
+            reply_markup=return_start(),
         )
         await bot.send_message(
             chat_id=ADMIN_ID,
@@ -476,6 +504,10 @@ async def hand_update_tariff_from_device(call: types.CallbackQuery, state: FSMCo
             f"📋 Критерии: девайс {data["device"]}, срок {data["period"]}, тариф {data['tariff']}, сколько оплатил {data['payment']}",
         )
         await update_balance_user(call.from_user.id, amount=data["balance"])
+        logger.info(f'Пользователь {call.from_user.id} успешно продлил подписку.')
     except Exception as e:
-        await call.message.answer(f"Произошла ошибка, попробуйте еще раз ! {e}")
+        logger.error(f'Произошла ошибка в функции update_payment, id {call.from_user.id}: {e}')
+        await call.message.answer(
+            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
+            )
         await state.clear()

@@ -10,7 +10,10 @@ from commands import set_commands
 import os
 from dotenv import load_dotenv
 
+from utils.scheduler import setup_scheduler
+
 load_dotenv(".env")
+logger = logging.getLogger(__name__)
 
 
 class ResetStateMiddleware(BaseMiddleware):
@@ -44,16 +47,19 @@ async def main():
         drop_pending_updates=True
     )  # удаляет все обновления, которые произошли после последнего завершения работы бота.
     await set_commands(bot)
-
+    scheduler = setup_scheduler(bot)
+    scheduler.start()
+    logger.info('scheduler успешно запущен')
     await dp.start_polling(
         bot, allowed_updates=dp.resolve_used_update_types()
-    )  # запускает бота, который будет получать обновления через Long Polling
+    ) # запускает бота, который будет получать обновления через Long Polling
+    logger.info('Bot успешно запущен')
 
 
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        format="[%(asctime)s] - %(levelname)s - %(name)s - %(message)s",
     )
 
     asyncio.run(main())

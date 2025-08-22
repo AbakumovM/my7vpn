@@ -1,7 +1,6 @@
-from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from db import ActualTariff
+from database.models import ActualTariff
 
 
 def get_keyboard_type_device(types: str = "set_device"):
@@ -83,6 +82,7 @@ def get_keyboard_tariff_for_update():
     )
     return keyboard
 
+
 def get_keyboard_yes_or_no():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
@@ -96,6 +96,7 @@ def get_keyboard_yes_or_no():
         ]
     )
     return keyboard
+
 
 def get_keyboard_yes_or_no_for_update():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
@@ -165,11 +166,7 @@ def get_keyboard_start():
         [InlineKeyboardButton(text="☠️ Не работает VPN", callback_data=f"error")]
     )
     keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text="Мои устройства 📱 💻", callback_data="mydevices"
-            )
-        ]
+        [InlineKeyboardButton(text="Мои устройства 📱 💻", callback_data="mydevices")]
     )
     keyboard.inline_keyboard.append(
         [InlineKeyboardButton(text="Помощь 🆘 ", callback_data=f"help")]
@@ -180,15 +177,15 @@ def get_keyboard_start():
 def get_keyboard_for_details_device(device_name: str):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text="Продлить подписку 💳", callback_data=f"up_tar:{device_name}")]
-        )
-    keyboard.inline_keyboard.append(
         [
             InlineKeyboardButton(
-                text="Мои устройства 📱 💻", callback_data="mydevices")]
-
-
+                text="Продлить подписку 💳", callback_data=f"up_tar:{device_name}"
             )
+        ]
+    )
+    keyboard.inline_keyboard.append(
+        [InlineKeyboardButton(text="Мои устройства 📱 💻", callback_data="mydevices")]
+    )
     keyboard.inline_keyboard.append(
         [InlineKeyboardButton(text="Помощь 🆘 ", callback_data="help")]
     )
@@ -205,6 +202,8 @@ def get_keyboard_approve_payment_or_cancel():
         [InlineKeyboardButton(text="Отмена ❌", callback_data="mydevices")]
     )
     return keyboard
+
+
 def get_keyboard_approve_payment_or_cancel_for_update():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
