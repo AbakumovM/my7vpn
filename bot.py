@@ -50,6 +50,14 @@ async def main():
     scheduler = setup_scheduler(bot)
     scheduler.start()
     logger.info('scheduler успешно запущен')
+    job = scheduler.get_job("check_subscriptions")
+    if job and job.next_run_time:
+        from datetime import datetime
+        next_run = job.next_run_time
+        logger.info("🚀 Планировщик запущен")
+        logger.info(f"📌 Следующее уведомление: {next_run.strftime('%d.%m.%Y %H:%M:%S %Z')}")
+    else:
+        print("⚠️ Задача не будет выполнена (время уже прошло?)")
     await dp.start_polling(
         bot, allowed_updates=dp.resolve_used_update_types()
     ) # запускает бота, который будет получать обновления через Long Polling
