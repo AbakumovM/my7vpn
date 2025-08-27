@@ -4,7 +4,7 @@ from database.models import ActualTariff
 
 
 def get_keyboard_type_device(types: str = "set_device"):
-    device = ["📱 iOS (iPhone, iPad)", "📱 Android", "💻 Компьютер (Windows, MacOS)"]
+    device = ["📱 iOS (iPhone, iPad)", "📱 Android", "💻 Компьютер (Windows, MacOS)", '📺 TV(Android)']
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     but_lst = []
     for dev in device:
@@ -226,19 +226,19 @@ def return_start():
 def get_keyboard_help():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text="☠️ Не работает VPN", callback_data=f"error")]
+        [InlineKeyboardButton(text="☠️ Не работает VPN", callback_data="error")]
     )
     keyboard.inline_keyboard.append(
         [
             InlineKeyboardButton(
-                text="📱 Настройка на Android", callback_data=f"settings:android"
+                text="📱 Настройка на Android", callback_data="settings:android"
             )
         ]
     )
     keyboard.inline_keyboard.append(
         [
             InlineKeyboardButton(
-                text="📱 Настройка на iPhone(iPad)", callback_data=f"settings:iphone"
+                text="📱 Настройка на iPhone(iPad)", callback_data="settings:iphone"
             )
         ]
     )
@@ -251,6 +251,10 @@ def get_keyboard_help():
         ]
     )
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text="🏠 Главное меню", callback_data=f"start")]
+        [InlineKeyboardButton(text="📺 Настройка TV(Android)", url='https://telegra.ph/Instrukciya-po-nastrojke-VPN-Key-na-Android-TV-08-27')]
     )
+    keyboard.inline_keyboard.append(
+        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="start")]
+    )
+    
     return keyboard
