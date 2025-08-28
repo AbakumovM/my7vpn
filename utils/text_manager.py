@@ -1,5 +1,6 @@
-from datetime import datetime
 import os
+from datetime import datetime
+
 from dotenv import load_dotenv
 
 load_dotenv(".env")
@@ -72,7 +73,6 @@ class TextManager:
             print(end_date_obj, datetime.now(), (end_date_obj - datetime.now()).days)
             if (end_date_obj - datetime.now()).days <= 7:
                 message += "\n\n⚠️ <b>Внимание! Ваша подписка истекает через несколько дней. Не забудьте продлить её.</b>"
-                flag = True
 
         return message, device_name
 
@@ -226,7 +226,7 @@ class TextManager:
     def get_message_new_user_referral() -> str:
         return (
             "🎉 Поздравляем! Ваш друг только что активировал VPN по вашей ссылке!\n\n"
-            f"Вам начислено: +50₽ реферальных бонусов\n\n"
+            "Вам начислено: +50₽ реферальных бонусов\n\n"
             "💡 Как использовать бонусы:\n"
             "✔️ Автоматически применяются при оплате подписки\n"
         )

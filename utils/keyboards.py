@@ -4,9 +4,13 @@ from database.models import ActualTariff
 
 
 def get_keyboard_type_device(types: str = "set_device"):
-    device = ["📱 iOS (iPhone, iPad)", "📱 Android", "💻 Компьютер (Windows, MacOS)", '📺 TV(Android)']
+    device = [
+        "📱 iOS (iPhone, iPad)",
+        "📱 Android",
+        "💻 Компьютер (Windows, MacOS)",
+        "📺 TV(Android)",
+    ]
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    but_lst = []
     for dev in device:
         keyboard.inline_keyboard.append(
             [InlineKeyboardButton(text=dev, callback_data=f"{types}:{dev.split()[1]}")]
@@ -87,12 +91,8 @@ def get_keyboard_yes_or_no():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
         [
-            InlineKeyboardButton(
-                text=f"✅ Да, подтверждаю", callback_data=f"finally:Да"
-            ),
-            InlineKeyboardButton(
-                text=f"❌ Нет, передумал", callback_data=f"finally:Нет"
-            ),
+            InlineKeyboardButton(text="✅ Да, подтверждаю", callback_data="finally:Да"),
+            InlineKeyboardButton(text="❌ Нет, передумал", callback_data="finally:Нет"),
         ]
     )
     return keyboard
@@ -103,10 +103,10 @@ def get_keyboard_yes_or_no_for_update():
     keyboard.inline_keyboard.append(
         [
             InlineKeyboardButton(
-                text=f"✅ Да, подтверждаю", callback_data=f"reup_finally:Да"
+                text="✅ Да, подтверждаю", callback_data="reup_finally:Да"
             ),
             InlineKeyboardButton(
-                text=f"❌ Нет, передумал", callback_data=f"reup_finally:Нет"
+                text="❌ Нет, передумал", callback_data="reup_finally:Нет"
             ),
         ]
     )
@@ -147,14 +147,14 @@ def get_basic_menu():
     keyboard = []
     keyboard.append(
         [
-            InlineKeyboardButton(text=f"➕ Добавить устр.", callback_data=f"added"),
-            InlineKeyboardButton(text=f"➖ Удалить устр.", callback_data=f"del"),
+            InlineKeyboardButton(text="➕ Добавить устр.", callback_data="added"),
+            InlineKeyboardButton(text="➖ Удалить устр.", callback_data="del"),
         ]
     )
     keyboard.append(
         [
-            InlineKeyboardButton(text=f"🏠 Главное меню", callback_data=f"start"),
-            InlineKeyboardButton(text=f"🆘 Помощь", callback_data=f"help"),
+            InlineKeyboardButton(text="🏠 Главное меню", callback_data="start"),
+            InlineKeyboardButton(text="🆘 Помощь", callback_data="help"),
         ]
     )
     return keyboard
@@ -163,13 +163,13 @@ def get_basic_menu():
 def get_keyboard_start():
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text="☠️ Не работает VPN", callback_data=f"error")]
+        [InlineKeyboardButton(text="☠️ Не работает VPN", callback_data="error")]
     )
     keyboard.inline_keyboard.append(
         [InlineKeyboardButton(text="Мои устройства 📱 💻", callback_data="mydevices")]
     )
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text="Помощь 🆘 ", callback_data=f"help")]
+        [InlineKeyboardButton(text="Помощь 🆘 ", callback_data="help")]
     )
     return keyboard
 
@@ -246,15 +246,20 @@ def get_keyboard_help():
         [
             InlineKeyboardButton(
                 text=" 💻 Настройка на Компьютер (Windows, MacOS)",
-                callback_data=f"settings:computer",
+                callback_data="settings:computer",
             )
         ]
     )
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text="📺 Настройка TV(Android)", url='https://telegra.ph/Instrukciya-po-nastrojke-VPN-Key-na-Android-TV-08-27')]
+        [
+            InlineKeyboardButton(
+                text="📺 Настройка TV(Android)",
+                url="https://telegra.ph/Instrukciya-po-nastrojke-VPN-Key-na-Android-TV-08-27",
+            )
+        ]
     )
     keyboard.inline_keyboard.append(
         [InlineKeyboardButton(text="🏠 Главное меню", callback_data="start")]
     )
-    
+
     return keyboard

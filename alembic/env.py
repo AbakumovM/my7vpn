@@ -1,12 +1,10 @@
+import os
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from db.db import DATABASE_URL, Base
+from sqlalchemy import create_engine, engine_from_config, pool
 
 from alembic import context
-import os
-from sqlalchemy import create_engine
-from db.db import DATABASE_URL, Base
 
 os.environ["ALEMBIC_RUNNING"] = "1"
 # this is the Alembic Config object, which provides

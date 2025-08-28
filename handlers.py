@@ -1,13 +1,27 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-from aiogram import Router
-from aiogram import types, F, Router
-from aiogram.types import BufferedInputFile
+
+from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.types import BufferedInputFile
+from dotenv import load_dotenv
+
+from database.db_service import create_vpn, get_referral_by_id, get_referral_code
+from database.device_service import (
+    del_device,
+    get_count_device_for_user,
+    get_devices_users,
+    get_full_info_device,
+    update_tariff_from_device,
+)
+from database.user_service import (
+    get_balance_user,
+    get_or_create_user,
+    update_balance_user,
+)
 from utils.files import get_photo_for_pay
-from utils.states import RegisterVpn
-from utils.text_manager import bot_repl
 from utils.keyboards import (
     get_keyboard_approve_payment_or_cancel,
     get_keyboard_approve_payment_or_cancel_for_update,
@@ -24,26 +38,8 @@ from utils.keyboards import (
     get_keyboard_yes_or_no_for_update,
     return_start,
 )
-from aiogram.fsm.context import FSMContext
-from aiogram import Bot
-from database.db_service import (
-    create_vpn,
-    get_referral_by_id,
-    get_referral_code,
-)
-from database.user_service import (
-    get_balance_user,
-    get_or_create_user,
-    update_balance_user,
-)
-from database.device_service import (
-    del_device,
-    get_count_device_for_user,
-    get_devices_users,
-    get_full_info_device,
-    update_tariff_from_device,
-)
-from dotenv import load_dotenv
+from utils.states import RegisterVpn
+from utils.text_manager import bot_repl
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +101,7 @@ async def get_start_callback(call: types.CallbackQuery):
             reply_markup=get_keyboard_start(),
         )
     except Exception as e:
-        logger.error(f'Произошла ошибка в функции get_start_callback: {e}')
+        logger.error(f"Произошла ошибка в функции get_start_callback: {e}")
         await call.message.edit_text(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -140,7 +136,9 @@ async def get_start_free_month(call: types.CallbackQuery, bot: Bot, state: FSMCo
             chat_id=data["referral_by"], text=bot_repl.get_message_new_user_referral()
         )
         await state.clear()
-        logger.info(f'Пользователь {call.from_user.id} успешно подключил VPN по реферальной ссылки от {data["referral_by"]}')
+        logger.info(
+            f'Пользователь {call.from_user.id} успешно подключил VPN по реферальной ссылки от {data["referral_by"]}'
+        )
 
 
 @router.callback_query(F.data.startswith("free_device"))
@@ -163,7 +161,9 @@ async def set_free_device_comp(call: types.CallbackQuery, bot: Bot, state: FSMCo
     await bot.send_message(
         chat_id=data["referral_by"], text=bot_repl.get_message_new_user_referral()
     )
-    logger.info(f'Пользователь {call.from_user.id} успешно подключил VPN по реферальной ссылки от {data["referral_by"]}')
+    logger.info(
+        f'Пользователь {call.from_user.id} успешно подключил VPN по реферальной ссылки от {data["referral_by"]}'
+    )
     await state.clear()
 
 
@@ -226,8 +226,12 @@ async def set_finally_vpn(call: types.CallbackQuery, state: FSMContext, bot: Bot
                 reply_markup=get_keyboard_approve_payment_or_cancel(),
             )
         except Exception as e:
-            logger.error(f'Произошла ошибка в функции set_finally_vpn, id {call.from_user.id}: {e}')
-            await call.message.answer("Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin.")
+            logger.error(
+                f"Произошла ошибка в функции set_finally_vpn, id {call.from_user.id}: {e}"
+            )
+            await call.message.answer(
+                "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
+            )
             await state.clear()
     else:
         await state.clear()
@@ -257,10 +261,16 @@ async def success_payment_answer(
             f"📋 Критерии: девайс {result[0]}, срок {data["period"]}, тариф {data['tariff']}, сколько оплатил {data['payment']}",
         )
         await update_balance_user(call.from_user.id, amount=data["balance"])
-        logger.info(f'Пользователь {call.from_user.id} успешно создал и оплатил подписку')
+        logger.info(
+            f"Пользователь {call.from_user.id} успешно создал и оплатил подписку"
+        )
     except Exception as e:
-        logger.error(f'Произошла ошибка в функции success_payment_answer, id {call.from_user.id}: {e}')
-        await call.message.answer("Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin.")
+        logger.error(
+            f"Произошла ошибка в функции success_payment_answer, id {call.from_user.id}: {e}"
+        )
+        await call.message.answer(
+            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
+        )
         await state.clear()
 
 
@@ -278,8 +288,12 @@ async def get_devices(msg: types.Message):
                 "У вас нет активных устройств", reply_markup=get_keyboard_start()
             )
     except Exception as e:
-        logger.error(f'Произошла ошибка в функции get_devices, id {msg.from_user.id}: {e}')
-        await msg.message.answer( "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin.")
+        logger.error(
+            f"Произошла ошибка в функции get_devices, id {msg.from_user.id}: {e}"
+        )
+        await msg.message.answer(
+            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
+        )
 
 
 @router.callback_query(F.data.startswith("mydevices"))
@@ -294,7 +308,9 @@ async def handle_my_devices_callback(call: types.CallbackQuery):
         else:
             await call.message.answer("У вас нет активных устройств")
     except Exception as e:
-        logger.error(f'Произошла ошибка в функции handle_my_devices_callback, id {call.from_user.id}: {e}')
+        logger.error(
+            f"Произошла ошибка в функции handle_my_devices_callback, id {call.from_user.id}: {e}"
+        )
         await call.message.answer(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -312,7 +328,9 @@ async def delete_device(call: types.CallbackQuery):
             "Какое устройство вы хотите отключить?", reply_markup=keyboard
         )
     except Exception as e:
-        logger.error(f'Произошла ошибка в функции delete_device, id {call.from_user.id}: {e}')
+        logger.error(
+            f"Произошла ошибка в функции delete_device, id {call.from_user.id}: {e}"
+        )
         await call.message.answer(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -331,9 +349,13 @@ async def del_device_approve(call: types.CallbackQuery, bot: Bot):
             f"🆔 ID: {call.from_user.id}\n"
             f"📋 Девайс: {result}",
         )
-        logger.info(f'Пользователь {call.from_user.id} удалил у себя устройство {result}.')
+        logger.info(
+            f"Пользователь {call.from_user.id} удалил у себя устройство {result}."
+        )
     except Exception as e:
-        logger.error(f'Произошла ошибка в функции del_device_approve, id {call.from_user.id}: {e}')
+        logger.error(
+            f"Произошла ошибка в функции del_device_approve, id {call.from_user.id}: {e}"
+        )
         await call.message.edit_text(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -369,7 +391,9 @@ async def error_help_user(call: types.CallbackQuery):
         else:
             await call.message.answer("У вас нет активных устройств")
     except Exception as e:
-        logger.error(f'Произошла ошибка в функции error_help_user, id {call.from_user.id}: {e}')
+        logger.error(
+            f"Произошла ошибка в функции error_help_user, id {call.from_user.id}: {e}"
+        )
         await call.message.answer(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
@@ -397,7 +421,7 @@ async def get_help_all(call: types.CallbackQuery):
 
 
 @router.message(Command("help"))
-async def get_help_all(msg: types.Message):
+async def get_help_all_command(msg: types.Message):
     await msg.answer(bot_repl.get_help_text(), reply_markup=get_keyboard_help())
 
 
@@ -470,9 +494,11 @@ async def update_payment(call: types.CallbackQuery, state: FSMContext):
                 reply_markup=get_keyboard_approve_payment_or_cancel_for_update(),
             )
         except Exception as e:
-            logger.error(f'Произошла ошибка в функции update_payment, id {call.from_user.id}: {e}')
+            logger.error(
+                f"Произошла ошибка в функции update_payment, id {call.from_user.id}: {e}"
+            )
             await call.message.answer(
-            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
+                "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
             )
             await state.clear()
     else:
@@ -488,7 +514,7 @@ async def hand_update_tariff_from_device(
 ):
     try:
         data = await state.get_data()
-        result = await update_tariff_from_device(
+        await update_tariff_from_device(
             data["device"], data["tariff"], data["period"], data["payment"]
         )
         await call.message.delete()
@@ -504,10 +530,12 @@ async def hand_update_tariff_from_device(
             f"📋 Критерии: девайс {data["device"]}, срок {data["period"]}, тариф {data['tariff']}, сколько оплатил {data['payment']}",
         )
         await update_balance_user(call.from_user.id, amount=data["balance"])
-        logger.info(f'Пользователь {call.from_user.id} успешно продлил подписку.')
+        logger.info(f"Пользователь {call.from_user.id} успешно продлил подписку.")
     except Exception as e:
-        logger.error(f'Произошла ошибка в функции update_payment, id {call.from_user.id}: {e}')
+        logger.error(
+            f"Произошла ошибка в функции update_payment, id {call.from_user.id}: {e}"
+        )
         await call.message.answer(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
-            )
+        )
         await state.clear()

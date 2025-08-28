@@ -1,15 +1,16 @@
 import asyncio
 import logging
+import os
+
 from aiogram import BaseMiddleware, Bot, Dispatcher, types
-from aiogram.fsm.context import FSMContext
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums.parse_mode import ParseMode
+from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from handlers import router
-from commands import set_commands
-import os
 from dotenv import load_dotenv
 
+from commands import set_commands
+from handlers import router
 from utils.scheduler import setup_scheduler
 
 load_dotenv(".env")
@@ -33,7 +34,7 @@ class ResetStateMiddleware(BaseMiddleware):
 
 async def main():
     bot = Bot(
-        token=os.getenv("BOT_TOKEN"),
+        token=os.getenv("BOT_TOKEN_TEST"),
         default=DefaultBotProperties(
             parse_mode=ParseMode.HTML,
         ),
@@ -49,19 +50,19 @@ async def main():
     await set_commands(bot)
     scheduler = setup_scheduler(bot)
     scheduler.start()
-    logger.info('scheduler успешно запущен')
     job = scheduler.get_job("check_subscriptions")
     if job and job.next_run_time:
-        from datetime import datetime
         next_run = job.next_run_time
         logger.info("🚀 Планировщик запущен")
-        logger.info(f"📌 Следующее уведомление: {next_run.strftime('%d.%m.%Y %H:%M:%S %Z')}")
+        logger.info(
+            f"📌 Следующее уведомление: {next_run.strftime('%d.%m.%Y %H:%M:%S %Z')}"
+        )
     else:
         print("⚠️ Задача не будет выполнена (время уже прошло?)")
     await dp.start_polling(
         bot, allowed_updates=dp.resolve_used_update_types()
-    ) # запускает бота, который будет получать обновления через Long Polling
-    logger.info('Bot успешно запущен')
+    )  # запускает бота, который будет получать обновления через Long Polling
+    logger.info("Bot успешно запущен")
 
 
 if __name__ == "__main__":

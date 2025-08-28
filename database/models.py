@@ -1,27 +1,20 @@
 import os
-import asyncpg
+from datetime import datetime, timezone
 from enum import Enum
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+
+from dotenv import load_dotenv
 from sqlalchemy import (
-    DECIMAL,
-    TIMESTAMP,
+    BigInteger,
     Boolean,
     Column,
-    DateTime,
-    Integer,
-    BigInteger,
-    Interval,
-    Numeric,
-    String,
     Date,
+    DateTime,
     ForeignKey,
-    create_engine,
-    func,
+    Integer,
+    String,
 )
-from datetime import datetime, timezone
-from sqlalchemy.orm import relationship
-from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 load_dotenv(".env")
 

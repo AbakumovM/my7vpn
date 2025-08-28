@@ -1,6 +1,8 @@
-from sqlalchemy import select
-from database.models import AsyncSessionLocal, User
 import logging
+
+from sqlalchemy import select
+
+from database.models import AsyncSessionLocal, User
 from utils.utl import generate_referral_code
 
 logger = logging.getLogger(__name__)

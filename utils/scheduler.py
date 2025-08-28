@@ -1,10 +1,14 @@
 # utils/scheduler.py
 import logging
 import zoneinfo
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from utils.background_tasks import check_pending_subscriptions
 from apscheduler.triggers.cron import CronTrigger
+
+from utils.background_tasks import check_pending_subscriptions
+
 logger = logging.getLogger(__name__)
+
 
 def setup_scheduler(bot):
     tz = zoneinfo.ZoneInfo("Asia/Yekaterinburg")
