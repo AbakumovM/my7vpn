@@ -119,7 +119,7 @@ async def scheduled_payments():
                     from users u 
                     join devices d  on u.id = d.user_id
                     join subscriptions s on s.device_id = d.id
-                    where s.end_date = current_date;"""
+                    where s.end_date::date = current_date;"""
         )
         try:
             result = await session.execute(query)
