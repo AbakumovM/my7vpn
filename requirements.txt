@@ -26,11 +26,13 @@ platformdirs==4.3.7
 propcache==0.3.0
 psycopg2==2.9.10
 pydantic==2.10.6
+pydantic-settings==2.10.1
 pydantic_core==2.27.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 six==1.17.0
 SQLAlchemy==2.0.38
+typing-inspection==0.4.1
 typing_extensions==4.12.2
 tzlocal==5.3.1
 yarl==1.18.3
