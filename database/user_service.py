@@ -50,7 +50,9 @@ async def get_balance_user(telegram_id: int):
             raise
 
 
-async def update_balance_user(telegram_id: int, amount: int, referral: bool = False):
+async def update_balance_user(
+    telegram_id: int, amount: int, referral: bool = False
+) -> None:
     async with AsyncSessionLocal() as session:
         try:
             user = await session.scalar(

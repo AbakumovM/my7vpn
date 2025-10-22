@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
-import os
 
 from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.types import BufferedInputFile
-from dotenv import load_dotenv
 
 from database.db_service import create_vpn, get_referral_by_id, get_referral_code
 from database.device_service import (
@@ -21,37 +17,35 @@ from database.user_service import (
     get_or_create_user,
     update_balance_user,
 )
+from keyboards.user_actions import CallbackAction, ChoiceType, PaymentStatus, VpnAction
+from utils.cbdata import VpnCallback
 from utils.files import get_photo_for_pay
-from utils.keyboards import (
+from keyboards.keyboards import (
+    create_inline_kb,
     get_keyboard_approve_payment_or_cancel,
-    get_keyboard_approve_payment_or_cancel_for_update,
     get_keyboard_devices,
     get_keyboard_devices_for_del,
     get_keyboard_for_details_device,
     get_keyboard_help,
     get_keyboard_start,
     get_keyboard_tariff,
-    get_keyboard_tariff_for_update,
-    get_keyboard_type_comp,
     get_keyboard_type_device,
-    get_keyboard_yes_or_no,
     get_keyboard_yes_or_no_for_update,
     return_start,
 )
-from utils.states import RegisterVpn
-from utils.text_manager import bot_repl
+
+from lexicon.text_manager import bot_repl
+from config.config_app import app_config
 
 logger = logging.getLogger(__name__)
 
-
-load_dotenv(".env")
-ADMIN_ID = os.getenv("ADMIN_ID")
-LINK = os.getenv("LINK")
+ADMIN_ID = app_config.bot.admin_id
+LINK = app_config.payment.payment_url
 router = Router()
 
 
-@router.message(Command("start"))
-async def get_start(msg: types.Message, state: FSMContext):
+@router.message(Command(CallbackAction.START))
+async def get_start(msg: types.Message):
     referral = msg.text.split(" ")[1] if len(msg.text.split(" ")) > 1 else None
     if referral:
         referral_by = await get_referral_by_id(referral)
@@ -71,207 +65,51 @@ async def get_start(msg: types.Message, state: FSMContext):
 
         await msg.answer(
             bot_repl.get_start_message_free_month(msg.from_user.full_name),
-            reply_markup=get_keyboard_type_device("free_set_device"),
+            reply_markup=get_keyboard_type_device(VpnAction.REFERRAL, referral_by),
         )
-        await state.update_data(referral_by=referral_by)
         return
     else:
         user = await get_or_create_user(msg.from_user.id)
         device = await get_count_device_for_user(msg.from_user.id)
         if device > 0:
+            keyboard = create_inline_kb(
+                1,
+                CallbackAction.VPN_ERROR,
+                CallbackAction.LIST_DEVICES,
+                CallbackAction.SUPPORT_HELP,
+            )
             await msg.answer(
                 bot_repl.get_start(msg.from_user.full_name, device, user.balance),
-                reply_markup=get_keyboard_start(),
+                reply_markup=keyboard,
             )
         else:
             await msg.answer(
                 bot_repl.get_start_message(msg.from_user.full_name),
-                reply_markup=get_keyboard_type_device(),
+                reply_markup=get_keyboard_type_device(VpnAction.NEW),
             )
-        await state.set_state(RegisterVpn.chooising_devise)
+        return
 
 
-@router.callback_query(F.data.startswith("start"))
+@router.callback_query(F.data.in_([CallbackAction.CANCEL, CallbackAction.START]))
 async def get_start_callback(call: types.CallbackQuery):
     try:
         user = await get_or_create_user(call.from_user.id)
         device = await get_count_device_for_user(call.from_user.id)
+        keyboard = create_inline_kb(
+            1,
+            CallbackAction.VPN_ERROR,
+            CallbackAction.LIST_DEVICES,
+            CallbackAction.SUPPORT_HELP,
+        )
         await call.message.answer(
             bot_repl.get_start(call.from_user.full_name, device, user.balance),
-            reply_markup=get_keyboard_start(),
+            reply_markup=keyboard,
         )
     except Exception as e:
         logger.error(f"Произошла ошибка в функции get_start_callback: {e}")
         await call.message.edit_text(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
-
-
-@router.callback_query(F.data.startswith("free_set_device"))
-async def get_start_free_month(call: types.CallbackQuery, bot: Bot, state: FSMContext):
-    device = call.data.split(":")[1]
-    if device in "Компьютер":
-        await call.message.edit_text(
-            "Пожалуйста, выберите тип компьютера, для которого вы хотите использовать эти настройки:",
-            reply_markup=get_keyboard_type_comp("free_device"),
-        )
-    else:
-        data = await state.get_data()
-        result = await create_vpn(
-            telegram_id=call.from_user.id, device=device, free_month=True
-        )
-        await bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"Пользователь хочет подключить VPN по реферальной ссылке!\n"
-            f"👤 Имя: {call.from_user.username}\n"
-            f"🆔 ID: {call.from_user.id}\n"
-            f"🆔 Кто пригласил: {data['referral_by']}"
-            f"📋 Критерии: девайс {device}, {result[0]}",
-        )
-        await update_balance_user(data["referral_by"], amount=50, referral=True)
-        await call.message.edit_text(
-            bot_repl.get_message_success_free_month(device), reply_markup=return_start()
-        )
-        await bot.send_message(
-            chat_id=data["referral_by"], text=bot_repl.get_message_new_user_referral()
-        )
-        await state.clear()
-        logger.info(
-            f'Пользователь {call.from_user.id} успешно подключил VPN по реферальной ссылки от {data["referral_by"]}'
-        )
-
-
-@router.callback_query(F.data.startswith("free_device"))
-async def set_free_device_comp(call: types.CallbackQuery, bot: Bot, state: FSMContext):
-    type_device = call.data.split(":")[1]
-    data = await state.get_data()
-    await create_vpn(telegram_id=call.from_user.id, device=type_device, free_month=True)
-    await bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"Пользователь хочет подключить VPN по реферальной ссылке!\n"
-        f"👤 Имя: {call.from_user.username}\n"
-        f"🆔 ID: {call.from_user.id}\n"
-        f"🆔 Кто пригласил: {data['referral_by']}"
-        f"📋 Критерии: девайс {type_device}",
-    )
-    await call.message.edit_text(
-        bot_repl.get_message_success_free_month(type_device),
-        reply_markup=return_start(),
-    )
-    await bot.send_message(
-        chat_id=data["referral_by"], text=bot_repl.get_message_new_user_referral()
-    )
-    logger.info(
-        f'Пользователь {call.from_user.id} успешно подключил VPN по реферальной ссылки от {data["referral_by"]}'
-    )
-    await state.clear()
-
-
-@router.callback_query(F.data.startswith("set_device"))
-async def set_device_callback(call: types.CallbackQuery, state: FSMContext):
-    device = call.data.split(":")[1]
-    if device in "Компьютер":
-        await call.message.answer(
-            "Пожалуйста, выберите тип компьютера, для которого вы хотите использовать эти настройки:",
-            reply_markup=get_keyboard_type_comp(),
-        )
-    else:
-        await state.update_data(device=device)
-        await call.message.answer(
-            "Выберете тариф, который хотите подключить:",
-            reply_markup=get_keyboard_tariff(),
-        )
-
-
-@router.callback_query(F.data.startswith("device"))
-async def set_device_comp(call: types.CallbackQuery, state: FSMContext):
-    type_device = call.data.split(":")[1]
-    await state.update_data(device=type_device)
-    await call.message.answer(
-        "Выберете тариф, который хотите подключить:", reply_markup=get_keyboard_tariff()
-    )
-
-
-@router.callback_query(F.data.startswith("tariff"))
-async def set_tariff_callback(call: types.CallbackQuery, state: FSMContext):
-    balance = await get_balance_user(call.from_user.id)
-    await call.message.delete()
-    tariff = call.data.split(":")[1]
-    period = call.data.split(":")[2]
-    payment = max(int(tariff) - balance, 0)
-    balance = max(balance - int(tariff), 0)
-    await state.update_data(
-        tariff=tariff, period=period, payment=payment, balance=balance
-    )
-    data = await state.get_data()
-    await call.message.answer(
-        bot_repl.get_full_info_payment(data), reply_markup=get_keyboard_yes_or_no()
-    )
-
-
-@router.callback_query(F.data.startswith("finally"))
-async def set_finally_vpn(call: types.CallbackQuery, state: FSMContext, bot: Bot):
-    answer = call.data.split(":")[1]
-    if answer in "Да":
-        try:
-            await call.message.delete()
-            file_date = await get_photo_for_pay()
-            photo = BufferedInputFile(file_date, filename="qr_payment.jpeg")
-            data = await state.get_data()
-            await call.message.answer_photo(
-                photo=photo,
-                caption=bot_repl.get_approve_payment(
-                    amount=data["payment"], balance=data["balance"], payment_link=LINK
-                ),
-                reply_markup=get_keyboard_approve_payment_or_cancel(),
-            )
-        except Exception as e:
-            logger.error(
-                f"Произошла ошибка в функции set_finally_vpn, id {call.from_user.id}: {e}"
-            )
-            await call.message.answer(
-                "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
-            )
-            await state.clear()
-    else:
-        await state.clear()
-        await call.message.answer(
-            "Давай еще раз начнем с начала", reply_markup=get_keyboard_type_device()
-        )
-
-
-@router.callback_query(F.data.startswith("success"))
-async def success_payment_answer(
-    call: types.CallbackQuery, state: FSMContext, bot: Bot
-):
-    try:
-        data = await state.get_data()
-        result = await create_vpn(
-            call.from_user.id, data["device"], data["period"], data["tariff"]
-        )
-        await call.message.delete()
-        await call.message.answer(
-            text=bot_repl.get_message_success_payment(), reply_markup=return_start()
-        )
-        await bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"Пользователь хочет подключить VPN!\n"
-            f"👤 Имя: {call.from_user.username}\n"
-            f"🆔 ID: {call.from_user.id}\n"
-            f"📋 Критерии: девайс {result[0]}, срок {data["period"]}, тариф {data['tariff']}, сколько оплатил {data['payment']}",
-        )
-        await update_balance_user(call.from_user.id, amount=data["balance"])
-        logger.info(
-            f"Пользователь {call.from_user.id} успешно создал и оплатил подписку"
-        )
-    except Exception as e:
-        logger.error(
-            f"Произошла ошибка в функции success_payment_answer, id {call.from_user.id}: {e}"
-        )
-        await call.message.answer(
-            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
-        )
-        await state.clear()
 
 
 @router.message(Command("devices"))
@@ -296,7 +134,7 @@ async def get_devices(msg: types.Message):
         )
 
 
-@router.callback_query(F.data.startswith("mydevices"))
+@router.callback_query(F.data == CallbackAction.LIST_DEVICES)
 async def handle_my_devices_callback(call: types.CallbackQuery):
     try:
         devices = await get_devices_users(call.from_user.id)
@@ -361,32 +199,25 @@ async def del_device_approve(call: types.CallbackQuery, bot: Bot):
         )
 
 
-@router.callback_query(F.data.startswith("added"))
-async def add_device_for_user(call: types.CallbackQuery, state: FSMContext):
-    await call.message.answer(
-        bot_repl.get_message_for_added_device(), reply_markup=get_keyboard_type_device()
-    )
-    await state.set_state(RegisterVpn.chooising_devise)
-
-
 @router.callback_query(F.data.startswith("conf"))
 async def conf_device_for_user(call: types.CallbackQuery):
     device_id = int(call.data.split(":")[1])
     result = await get_full_info_device(device_id)
     text, device_name = bot_repl.generate_device_info_message(result)
     await call.message.answer(
-        text=text, reply_markup=get_keyboard_for_details_device(device_name)
+        text=text,
+        reply_markup=get_keyboard_for_details_device(device_name=result["device_name"]),
     )
 
 
-@router.callback_query(F.data.startswith("error"))
+@router.callback_query(F.data == CallbackAction.VPN_ERROR)
 async def error_help_user(call: types.CallbackQuery):
     try:
         devices = await get_devices_users(call.from_user.id)
         if devices is not None:
             await call.message.answer(
                 "С каким устройством у вас возникли проблемы? Пожалуйста, выберите из списка ниже:",
-                reply_markup=get_keyboard_devices(devices, "errdev"),
+                reply_markup=get_keyboard_devices(devices, CallbackAction.DEVICE_ERROR),
             )
         else:
             await call.message.answer("У вас нет активных устройств")
@@ -399,38 +230,42 @@ async def error_help_user(call: types.CallbackQuery):
         )
 
 
-@router.callback_query(F.data.startswith("errdev"))
+@router.callback_query(F.data.startswith(CallbackAction.DEVICE_ERROR))
 async def send_message_error_for_admin(call: types.CallbackQuery, bot: Bot):
-    device_id = call.data.split(":")[1]
+    device_id = call.data.split(":")[2]
     await bot.send_message(
         chat_id=ADMIN_ID,
         text=f"Пользователь сообщил о проблеме с подключением!\n"
         f"👤 Имя: {call.from_user.username}\n"
         f"🆔 ID: {call.from_user.id}|{device_id}",
     )
-    await call.message.answer(
-        bot_repl.get_message_admin_error(), reply_markup=get_keyboard_start()
+    keyboard = create_inline_kb(
+        1,
+        CallbackAction.VPN_ERROR,
+        CallbackAction.LIST_DEVICES,
+        CallbackAction.SUPPORT_HELP,
     )
+    await call.message.answer(bot_repl.get_message_admin_error(), reply_markup=keyboard)
 
 
-@router.callback_query(F.data.startswith("help"))
+@router.callback_query(F.data == CallbackAction.SUPPORT_HELP)
 async def get_help_all(call: types.CallbackQuery):
     await call.message.answer(
         bot_repl.get_help_text(), reply_markup=get_keyboard_help()
     )
 
 
-@router.message(Command("help"))
+@router.message(Command(CallbackAction.SUPPORT_HELP))
 async def get_help_all_command(msg: types.Message):
     await msg.answer(bot_repl.get_help_text(), reply_markup=get_keyboard_help())
 
 
-@router.callback_query(F.data.startswith("settings"))
+@router.callback_query(F.data.startswith("settings:"))
 async def get_settings_android(call: types.CallbackQuery):
     settings = {
-        "android": bot_repl.get_android_settings(),
-        "computer": bot_repl.get_computer_settings(),
-        "iphone": bot_repl.get_settings_iphone(),
+        "android_phone": bot_repl.get_android_settings(),
+        "desktop": bot_repl.get_computer_settings(),
+        "ios": bot_repl.get_settings_iphone(),
     }
     settings_type = call.data.split(":")[1]
     await call.message.answer(
@@ -440,102 +275,165 @@ async def get_settings_android(call: types.CallbackQuery):
     )
 
 
-@router.message(Command("invite"))
+@router.message(Command(CallbackAction.INVITE))
 async def invite_user(msg: types.Message):
     referral_code = await get_referral_code(msg.from_user.id)
+    keyboard = create_inline_kb(
+        1,
+        CallbackAction.VPN_ERROR,
+        CallbackAction.LIST_DEVICES,
+        CallbackAction.SUPPORT_HELP,
+    )
     await msg.answer(
         bot_repl.get_message_invite_friend(referral_code),
-        reply_markup=get_keyboard_start(),
+        reply_markup=keyboard,
     )
 
 
-@router.callback_query(F.data.startswith("up_"))
-async def update_device(call: types.CallbackQuery, state: FSMContext):
-    device_name = call.data.split(":")[1]
-    await state.update_data(device=device_name)
-    await call.message.answer(
-        "Выберете тариф, который хотите подключить:",
-        reply_markup=get_keyboard_tariff_for_update(),
-    )
+@router.callback_query(VpnCallback.filter())
+async def test_factory(call: types.CallbackQuery, callback_data: VpnCallback, bot: Bot):
+    action = callback_data.action
+    device = callback_data.device
+    duration = callback_data.duration
+    referral_id = callback_data.referral_id
+    payment = callback_data.payment
+    balance = callback_data.balance
+    choice = callback_data.choice
+    payment_status = callback_data.payment_status
 
+    if device == None:
+        await call.message.edit_text(
+            bot_repl.get_message_for_added_device(),
+            reply_markup=get_keyboard_type_device(
+                action=action, referral_id=referral_id
+            ),
+        )
+        await call.answer()
+        return
+    if duration == 0:
+        await call.message.edit_text(
+            "Выберете тариф, который хотите подключить:",
+            reply_markup=get_keyboard_tariff(
+                action=action, device=device, referral_id=referral_id
+            ),
+        )
+        await call.answer()
+        return
 
-@router.callback_query(F.data.startswith("uptar"))
-async def update_finally(call: types.CallbackQuery, state: FSMContext):
-    balance = await get_balance_user(call.from_user.id)
-    await call.message.delete()
-    tariff = call.data.split(":")[1]
-    period = call.data.split(":")[2]
-    payment = max(int(tariff) - balance, 0)
-    balance = max(balance - int(tariff), 0)
-    await state.update_data(
-        tariff=tariff, period=period, payment=payment, balance=balance
-    )
-    data = await state.get_data()
-    await call.message.answer(
-        bot_repl.get_full_info_payment(data),
-        reply_markup=get_keyboard_yes_or_no_for_update(),
-    )
-
-
-@router.callback_query(F.data.startswith("reup_finally"))
-async def update_payment(call: types.CallbackQuery, state: FSMContext):
-    answer = call.data.split(":")[1]
-    if answer in "Да":
-        try:
-            await call.message.delete()
-            file_date = await get_photo_for_pay()
-            photo = BufferedInputFile(file_date, filename="qr_payment.jpeg")
-            data = await state.get_data()
-            await call.message.answer_photo(
-                photo=photo,
-                caption=bot_repl.get_approve_payment(
-                    amount=data["payment"], balance=data["balance"], payment_link=LINK
-                ),
-                reply_markup=get_keyboard_approve_payment_or_cancel_for_update(),
-            )
-        except Exception as e:
-            logger.error(
-                f"Произошла ошибка в функции update_payment, id {call.from_user.id}: {e}"
-            )
-            await call.message.answer(
-                "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
-            )
-            await state.clear()
-    else:
-        await state.clear()
+    if balance is None:
+        user_balance = await get_balance_user(call.from_user.id)
+        finally_payment = max(payment - user_balance, 0)
+        balance = max(user_balance - payment, 0)
+        await call.message.edit_text(
+            bot_repl.get_full_info_payment(device, duration, finally_payment, payment),
+            reply_markup=get_keyboard_yes_or_no_for_update(
+                action=action,
+                device=device,
+                duration=duration,
+                balance=balance,
+                payment=finally_payment,
+                referral_id=referral_id,
+            ),
+        )
+        await call.answer()
+        return
+    if choice == ChoiceType.NO or payment_status == PaymentStatus.FAILED:
+        keyboard = create_inline_kb(1, CallbackAction.START)
+        await call.message.delete()
         await call.message.answer(
-            "Давай еще раз начнем с начала", reply_markup=get_keyboard_type_device()
+            text=bot_repl.send_messages_cancel_choice(), reply_markup=keyboard
+        )
+        await call.answer()
+        return
+    if choice == ChoiceType.YES:
+        await call.message.delete()
+        file_date = await get_photo_for_pay()
+        choice = ChoiceType.STOP
+        await call.message.answer_photo(
+            photo=file_date,
+            caption=bot_repl.get_approve_payment(amount=payment, payment_link=LINK),
+            reply_markup=get_keyboard_approve_payment_or_cancel(
+                action=action,
+                device=device,
+                duration=duration,
+                referral_id=referral_id,
+                payment=payment,
+                balance=balance,
+                choice=choice,
+            ),
+        )
+        await call.answer()
+        return
+    if action == CallbackAction.NEW_SUB and payment_status == PaymentStatus.SUCCESS:
+        result = await create_vpn(
+            telegram_id=call.from_user.id,
+            device=device,
+            period=duration,
+            tariff=payment,
+        )
+        await call.message.delete()
+        await call.message.answer(
+            text=bot_repl.get_message_success_payment(), reply_markup=return_start()
+        )
+        await update_balance_user(call.from_user.id, amount=balance)
+
+        await bot.send_message(
+            chat_id=ADMIN_ID,
+            text=bot_repl.send_message_admin_new_device(
+                username=call.from_user.username,
+                user_id=call.from_user.id,
+                device=result[0],
+                duration=duration,
+                payment=payment,
+            ),
         )
 
+        await call.answer()
+        return
 
-@router.callback_query(F.data.startswith("fup_success"))
-async def hand_update_tariff_from_device(
-    call: types.CallbackQuery, state: FSMContext, bot: Bot
-):
-    try:
-        data = await state.get_data()
-        await update_tariff_from_device(
-            data["device"], data["tariff"], data["period"], data["payment"]
-        )
+    if action == VpnAction.RENEW:
+        print(duration, device, payment)
+        result = await update_tariff_from_device(device, duration, payment)
+
         await call.message.delete()
         await call.message.answer(
             text=bot_repl.get_message_success_payment_update(),
             reply_markup=return_start(),
         )
+
+        await update_balance_user(call.from_user.id, amount=balance)
+
         await bot.send_message(
             chat_id=ADMIN_ID,
-            text=f"Пользователь продлил подписку VPN!\n"
-            f"👤 Имя: {call.from_user.username}\n"
-            f"🆔 ID: {call.from_user.id}\n"
-            f"📋 Критерии: девайс {data["device"]}, срок {data["period"]}, тариф {data['tariff']}, сколько оплатил {data['payment']}",
+            text=bot_repl.send_messages_for_admin_update(
+                username=call.from_user.username,
+                user_id=call.from_user.id,
+                device=device,
+                duration=duration,
+                payment=payment,
+            ),
         )
-        await update_balance_user(call.from_user.id, amount=data["balance"])
-        logger.info(f"Пользователь {call.from_user.id} успешно продлил подписку.")
-    except Exception as e:
-        logger.error(
-            f"Произошла ошибка в функции update_payment, id {call.from_user.id}: {e}"
+        await call.answer()
+        return
+    if action == VpnAction.REFERRAL:
+        result = await create_vpn(
+            telegram_id=call.from_user.id, device=device, free_month=True
         )
-        await call.message.answer(
-            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
+        await bot.send_message(
+            chat_id=ADMIN_ID,
+            text=bot_repl.send_message_admin_new_user_referral(
+                username=call.from_user.username,
+                user_id=call.from_user.id,
+                device=result[0],
+                referral_id=referral_id,
+            ),
         )
-        await state.clear()
+        await update_balance_user(referral_id, amount=50, referral=True)
+        await call.message.edit_text(
+            bot_repl.get_message_success_free_month(device), reply_markup=return_start()
+        )
+        await bot.send_message(
+            chat_id=referral_id, text=bot_repl.get_message_new_user_referral()
+        )
+        await call.answer()
+        return

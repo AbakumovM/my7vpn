@@ -1,8 +1,6 @@
 import os
 from datetime import datetime, timezone
-from enum import Enum
 
-from dotenv import load_dotenv
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -15,10 +13,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from config.config_app import app_config
+from enum import StrEnum
 
-load_dotenv(".env")
-
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = app_config.database.url
 Base = declarative_base()
 
 # Создаем движок и сессию
@@ -29,17 +27,10 @@ if not os.getenv("ALEMBIC_RUNNING"):
     )
 
 
-class SubscriptionStatus(str, Enum):
+class SubscriptionStatus(StrEnum):
     active = "active"
     expired = "expired"
     pending = "pending"
-
-
-class ActualTariff:
-    month_1 = 150
-    month_3 = 400
-    month_6 = 700
-    month_12 = 1200
 
 
 class User(Base):
@@ -49,7 +40,7 @@ class User(Base):
     telegram_id = Column(BigInteger, unique=True, nullable=False)
     created_at = Column(Date, default=datetime.now(timezone.utc))
     referral_code = Column(String, nullable=True)
-    referred_by = Column(Integer, nullable=True, default=None)
+    referred_by = Column(BigInteger, nullable=True, default=None)
     balance = Column(Integer, default=0)
     free_months = Column(Boolean, default=False)
     devices = relationship(

@@ -8,7 +8,7 @@ from aiogram import Bot
 from aiogram.types import BufferedInputFile
 
 from database.db_service import scheduled_payments
-from utils.text_manager import bot_repl
+from lexicon.text_manager import bot_repl
 
 ADMIN_ID = os.getenv("ADMIN_ID")
 logger = logging.getLogger(__name__)

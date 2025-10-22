@@ -7,6 +7,7 @@ from sqlalchemy import func, select, text
 
 from database.models import AsyncSessionLocal, Device, Payment, Subscription, User
 from utils.utl import generate_referral_code
+from config.config_app import app_config
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +41,17 @@ async def create_vpn(
                 await session.flush()
                 logger.info(f"Device created: {device.device_name}")
 
-                period = 1 if free_month and period is None else period
+                if free_month:
+                    period = app_config.payment.free_month
+                    end_date = datetime.now(timezone.utc) + relativedelta(days=period)
+                else:
+                    end_date = datetime.now(timezone.utc) + relativedelta(months=period)
+
                 sub = Subscription(
                     device_id=device.id,
-                    plan=int(period),
+                    plan=period,
                     start_date=datetime.now(timezone.utc),
-                    end_date=datetime.now(timezone.utc)
-                    + relativedelta(months=int(period)),
+                    end_date=end_date,
                 )
                 session.add(sub)
                 await session.flush()
@@ -54,7 +59,7 @@ async def create_vpn(
 
                 pay = Payment(
                     subscription_id=sub.id,
-                    amount=0 if free_month else int(tariff),
+                    amount=0 if free_month else tariff,
                     payment_date=datetime.now(timezone.utc),
                 )
                 session.add(pay)
