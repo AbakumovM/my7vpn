@@ -17,7 +17,7 @@ class CallbackAction(StrEnum):
 
     # Навигация
     START = "start"
-    INVITE = "INVITE"
+    INVITE = "invite"
 
     # Подтверждение действия
     YES = "yes"

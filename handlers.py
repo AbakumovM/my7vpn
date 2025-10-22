@@ -255,7 +255,7 @@ async def get_help_all(call: types.CallbackQuery):
     )
 
 
-@router.message(Command(CallbackAction.SUPPORT_HELP))
+@router.message(Command('help'))
 async def get_help_all_command(msg: types.Message):
     await msg.answer(bot_repl.get_help_text(), reply_markup=get_keyboard_help())
 
