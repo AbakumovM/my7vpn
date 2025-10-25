@@ -9,8 +9,9 @@ from aiogram.types import BufferedInputFile
 
 from database.db_service import scheduled_payments
 from lexicon.text_manager import bot_repl
+from config.config_app import app_config
 
-ADMIN_ID = os.getenv("ADMIN_ID")
+ADMIN_ID = app_config.bot.admin_id
 logger = logging.getLogger(__name__)
 
 
