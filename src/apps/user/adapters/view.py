@@ -1,0 +1,32 @@
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.apps.user.adapters.orm import UserORM
+
+
+class SQLAlchemyUserView:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_balance(self, telegram_id: int) -> int:
+        result = await self._session.execute(
+            select(UserORM.balance).where(UserORM.telegram_id == telegram_id)
+        )
+        return result.scalar_one_or_none() or 0
+
+    async def get_referral_code(self, telegram_id: int) -> str | None:
+        result = await self._session.execute(
+            select(UserORM.referral_code).where(UserORM.telegram_id == telegram_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_device_count(self, telegram_id: int) -> int:
+        # импорт здесь чтобы избежать циклических зависимостей
+        from src.apps.device.adapters.orm import DeviceORM  # noqa: PLC0415
+
+        result = await self._session.execute(
+            select(func.count(DeviceORM.id))
+            .join(UserORM, DeviceORM.user_id == UserORM.id)
+            .where(UserORM.telegram_id == telegram_id)
+        )
+        return result.scalar_one() or 0

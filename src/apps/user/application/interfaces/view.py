@@ -1,0 +1,9 @@
+from typing import Protocol
+
+
+class UserView(Protocol):
+    async def get_balance(self, telegram_id: int) -> int: ...
+
+    async def get_referral_code(self, telegram_id: int) -> str | None: ...
+
+    async def get_device_count(self, telegram_id: int) -> int: ...
