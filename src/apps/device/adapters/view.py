@@ -24,6 +24,12 @@ class SQLAlchemyDeviceView:
         )
         return [DeviceSummary(id=row.id, device_name=row.device_name) for row in result]
 
+    async def list_for_user_by_id(self, user_id: int) -> list[DeviceSummary]:
+        result = await self._session.execute(
+            select(DeviceORM.id, DeviceORM.device_name).where(DeviceORM.user_id == user_id)
+        )
+        return [DeviceSummary(id=row.id, device_name=row.device_name) for row in result]
+
     async def get_full_info(self, device_id: int) -> DeviceDetailInfo | None:
         result = await self._session.execute(
             select(

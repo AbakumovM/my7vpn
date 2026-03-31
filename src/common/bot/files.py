@@ -1,6 +1,7 @@
 import os
-from aiogram.types import BufferedInputFile
+
 import aiofiles
+from aiogram.types import BufferedInputFile
 
 
 async def get_photo_for_pay():

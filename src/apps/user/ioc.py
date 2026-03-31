@@ -3,9 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.user.adapters.gateway import SQLAlchemyUserGateway
 from src.apps.user.adapters.view import SQLAlchemyUserView
+from src.apps.user.application.interactor import UserInteractor
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.apps.user.application.interfaces.view import UserView
-from src.apps.user.application.interactor import UserInteractor
 from src.infrastructure.database.uow import SQLAlchemyUoW
 
 

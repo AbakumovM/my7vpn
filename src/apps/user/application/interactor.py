@@ -8,6 +8,7 @@ from src.apps.user.domain.commands import (
     GetOrCreateUser,
     GetReferralCode,
     MarkFreeMonthUsed,
+    SetUserEmail,
 )
 from src.apps.user.domain.exceptions import (
     InsufficientBalance,
@@ -20,7 +21,8 @@ from src.infrastructure.database.uow import SQLAlchemyUoW
 
 @dataclass(frozen=True)
 class UserInfo:
-    telegram_id: int
+    telegram_id: int | None
+    email: str | None
     balance: int
     free_months: bool
     referral_code: str | None
@@ -46,6 +48,7 @@ class UserInteractor:
         if user is not None:
             return UserInfo(
                 telegram_id=user.telegram_id,
+                email=user.email,
                 balance=user.balance,
                 free_months=user.free_months,
                 referral_code=user.referral_code,
@@ -128,6 +131,23 @@ class UserInteractor:
         await self._uow.commit()
         return UserInfo(
             telegram_id=user.telegram_id,
+            email=user.email,
+            balance=user.balance,
+            free_months=user.free_months,
+            referral_code=user.referral_code,
+        )
+
+    async def set_email(self, cmd: SetUserEmail) -> UserInfo:
+        user = await self._gateway.get_by_telegram_id(cmd.telegram_id)
+        if user is None:
+            raise UserNotFound(cmd.telegram_id)
+
+        user.email = cmd.email
+        await self._gateway.save(user)
+        await self._uow.commit()
+        return UserInfo(
+            telegram_id=user.telegram_id,
+            email=user.email,
             balance=user.balance,
             free_months=user.free_months,
             referral_code=user.referral_code,

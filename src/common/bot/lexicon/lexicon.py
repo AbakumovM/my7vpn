@@ -1,6 +1,5 @@
 from src.common.bot.keyboards.user_actions import CallbackAction, DeviceType
 
-
 LEXICON_COMMANDS_RU: dict[str, str] = {
     "start": "🏠 Главное меню",
     "devices": "📱 Мои устройства",

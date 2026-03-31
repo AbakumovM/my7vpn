@@ -1,11 +1,9 @@
-import os
 from datetime import datetime
 
 from src.infrastructure.config import app_config
 
 
 class TextManager:
-
     @staticmethod
     def get_start_message(user_name):
         return (
@@ -241,7 +239,7 @@ class TextManager:
 
     @staticmethod
     def get_message_success_payment_update():
-        return "💳 <b>Спасибо! Ваша оплата принята.</b>\n\n" "🔹 Подписка продлена!\n\n"
+        return "💳 <b>Спасибо! Ваша оплата принята.</b>\n\n🔹 Подписка продлена!\n\n"
 
     @staticmethod
     def send_messages_end_pay(device_name: str) -> str:

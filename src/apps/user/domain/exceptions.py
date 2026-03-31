@@ -12,9 +12,7 @@ class ReferralNotFound(Exception):
 
 class InsufficientBalance(Exception):
     def __init__(self, telegram_id: int, balance: int, required: int) -> None:
-        super().__init__(
-            f"User {telegram_id} has {balance}, required {required}"
-        )
+        super().__init__(f"User {telegram_id} has {balance}, required {required}")
         self.telegram_id = telegram_id
         self.balance = balance
         self.required = required

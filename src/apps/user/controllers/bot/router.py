@@ -1,9 +1,10 @@
 import structlog
-
 from aiogram import F, Router, types
 from aiogram.filters import Command
 from dishka.integrations.aiogram import FromDishka
 
+from src.apps.auth.application.interactor import AuthInteractor
+from src.apps.auth.domain.commands import CreateBotToken
 from src.apps.user.application.interactor import UserInteractor
 from src.apps.user.application.interfaces.view import UserView
 from src.apps.user.domain.commands import GetOrCreateUser, GetReferralCode
@@ -48,6 +49,7 @@ async def handle_start(
         # Нужен telegram_id реферера — берём через UserView через код
         # referral_id передаётся в callback для дальнейшего flow
         from src.apps.user.application.interfaces.gateway import UserGateway  # noqa: PLC0415
+
         gateway: UserGateway = interactor._gateway  # type: ignore[attr-defined]
         referrer = await gateway.get_by_referral_code(referral_code)
         referral_id = referrer.telegram_id if referrer else None
@@ -104,6 +106,26 @@ async def handle_start_callback(
         await call.message.edit_text(
             "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
         )
+
+
+@router.message(Command("web"))
+async def handle_web_login(
+    msg: types.Message,
+    user_view: FromDishka[UserView],
+    auth_interactor: FromDishka[AuthInteractor],
+) -> None:
+    user_id = await user_view.get_user_id(msg.from_user.id)
+    if user_id is None:
+        await msg.answer("Сначала запустите бота командой /start")
+        return
+
+    token = await auth_interactor.create_bot_token(CreateBotToken(user_id=user_id))
+    site_url = app_config.auth.site_url
+    link = f"{site_url}/api/v1/auth/bot-token/{token}"
+    await msg.answer(
+        f"🌐 Ваша ссылка для входа на сайт:\n{link}\n\n"
+        f"Ссылка действительна {app_config.auth.bot_token_expire_minutes} минут.",
+    )
 
 
 @router.message(Command(CallbackAction.INVITE))

@@ -1,6 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from src.common.bot.lexicon.lexicon import LEXICON_INLINE_DEVICE_RU, LEXICON_INLINE_RU
+
+from src.common.bot.cbdata import VpnCallback
 from src.common.bot.keyboards.user_actions import (
     ActualTariff,
     CallbackAction,
@@ -9,7 +10,7 @@ from src.common.bot.keyboards.user_actions import (
     PaymentStatus,
     VpnAction,
 )
-from src.common.bot.cbdata import VpnCallback
+from src.common.bot.lexicon.lexicon import LEXICON_INLINE_DEVICE_RU, LEXICON_INLINE_RU
 
 
 # Функция для формирования инлайн-клавиатуры на лету
@@ -25,11 +26,7 @@ def create_inline_kb(width: int, *args: str, **kwargs: str) -> InlineKeyboardMar
         for button in args:
             buttons.append(
                 InlineKeyboardButton(
-                    text=(
-                        LEXICON_INLINE_RU[button]
-                        if button in LEXICON_INLINE_RU
-                        else button
-                    ),
+                    text=(LEXICON_INLINE_RU[button] if button in LEXICON_INLINE_RU else button),
                     callback_data=button,
                 )
             )
@@ -44,9 +41,7 @@ def create_inline_kb(width: int, *args: str, **kwargs: str) -> InlineKeyboardMar
     return kb_builder.as_markup()
 
 
-def get_keyboard_type_device(
-    action: str, referral_id: int | None = None
-) -> InlineKeyboardMarkup:
+def get_keyboard_type_device(action: str, referral_id: int | None = None) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for dev in DeviceType:
         keyboard.inline_keyboard.append(
@@ -60,13 +55,9 @@ def get_keyboard_type_device(
                         referral_id=referral_id,
                         payment=0 if action == VpnAction.REFERRAL else None,
                         balance=0 if action == VpnAction.REFERRAL else None,
-                        choice=(
-                            ChoiceType.STOP if action == VpnAction.REFERRAL else None
-                        ),
+                        choice=(ChoiceType.STOP if action == VpnAction.REFERRAL else None),
                         payment_status=(
-                            PaymentStatus.SUCCESS
-                            if action == VpnAction.REFERRAL
-                            else None
+                            PaymentStatus.SUCCESS if action == VpnAction.REFERRAL else None
                         ),
                     ).pack(),
                 )
@@ -272,9 +263,7 @@ def get_basic_menu() -> list[list[InlineKeyboardButton]]:
         [
             InlineKeyboardButton(
                 text="➕ Добавить устр.",
-                callback_data=VpnCallback(
-                    action=CallbackAction.NEW_SUB, device=None
-                ).pack(),
+                callback_data=VpnCallback(action=CallbackAction.NEW_SUB, device=None).pack(),
             ),
             InlineKeyboardButton(text="➖ Удалить устр.", callback_data="del"),
         ]
@@ -409,6 +398,19 @@ def get_keyboard_approve_payment_or_cancel_for_update():
     )
     keyboard.inline_keyboard.append(
         [InlineKeyboardButton(text="Отмена ❌", callback_data="mydevices")]
+    )
+    return keyboard
+
+
+def get_keyboard_skip_email() -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    keyboard.inline_keyboard.append(
+        [
+            InlineKeyboardButton(
+                text="Пропустить ⏩",
+                callback_data="skip_email",
+            )
+        ]
     )
     return keyboard
 

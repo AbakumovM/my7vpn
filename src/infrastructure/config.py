@@ -20,6 +20,23 @@ class PaymentSettings(BaseModel):
     free_month: int
 
 
+class AuthSettings(BaseModel):
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 1440  # 24 часа
+    otp_expire_minutes: int = 5
+    bot_token_expire_minutes: int = 10
+    site_url: str = "http://localhost:8000"
+
+
+class SmtpSettings(BaseModel):
+    host: str = "smtp.gmail.com"
+    port: int = 587
+    username: str = ""
+    password: str = ""
+    from_email: str = ""
+
+
 class LoggingSettings(BaseModel):
     log_level: str = "INFO"
     log_json: bool = False
@@ -33,6 +50,8 @@ class AppConfig(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     bot: BotSettings = Field(default_factory=BotSettings)
     payment: PaymentSettings = Field(default_factory=PaymentSettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
+    smtp: SmtpSettings = Field(default_factory=SmtpSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
 
     model_config = SettingsConfigDict(

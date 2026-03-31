@@ -1,5 +1,4 @@
 import structlog
-
 from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
 from dishka.integrations.aiogram import FromDishka

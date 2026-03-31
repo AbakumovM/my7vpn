@@ -3,7 +3,6 @@ from datetime import datetime
 from io import StringIO
 
 import structlog
-
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
 from dishka import AsyncContainer

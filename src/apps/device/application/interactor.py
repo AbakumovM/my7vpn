@@ -1,6 +1,6 @@
 import random
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dateutil.relativedelta import relativedelta
 
@@ -13,7 +13,11 @@ from src.apps.device.domain.commands import (
     GetExpiringSubscriptions,
     RenewSubscription,
 )
-from src.apps.device.domain.exceptions import DeviceNotFound, SubscriptionNotFound, UserDeviceNotFound
+from src.apps.device.domain.exceptions import (
+    DeviceNotFound,
+    SubscriptionNotFound,
+    UserDeviceNotFound,
+)
 from src.apps.device.domain.models import Device, Payment, Subscription
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.infrastructure.database.uow import SQLAlchemyUoW
@@ -49,7 +53,7 @@ class DeviceInteractor:
             raise UserDeviceNotFound(cmd.telegram_id)
 
         device_name = await self._generate_device_name(cmd.device_type)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         end_date = now + relativedelta(months=cmd.period_months)
 
         subscription = Subscription(
@@ -83,7 +87,7 @@ class DeviceInteractor:
             raise UserDeviceNotFound(cmd.telegram_id)
 
         device_name = await self._generate_device_name(cmd.device_type)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         end_date = now + relativedelta(days=cmd.period_days)
 
         subscription = Subscription(
@@ -121,7 +125,7 @@ class DeviceInteractor:
         if device.subscription is None:
             raise SubscriptionNotFound(device.id or 0)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         sub = device.subscription
         # Если подписка истекла — продлеваем от now, иначе — от end_date
         base = sub.end_date if sub.end_date > now else now

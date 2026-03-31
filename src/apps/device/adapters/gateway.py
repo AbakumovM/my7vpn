@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from src.apps.device.adapters.orm import DeviceORM, PaymentORM, SubscriptionORM
-from src.apps.device.domain.models import Device, Payment, Subscription
+from src.apps.device.domain.models import Device, Subscription
 from src.apps.user.adapters.orm import UserORM
 
 
@@ -92,16 +92,14 @@ class SQLAlchemyDeviceGateway:
 
                 if device_orm.subscription.payments:
                     last = device_orm.subscription.payments[-1]
-                    last.payment_date = datetime.now(timezone.utc)
+                    last.payment_date = datetime.now(UTC)
 
             await self._session.flush()
 
     async def delete(self, device: Device) -> None:
         if device.id is None:
             return
-        result = await self._session.execute(
-            select(DeviceORM).where(DeviceORM.id == device.id)
-        )
+        result = await self._session.execute(select(DeviceORM).where(DeviceORM.id == device.id))
         device_orm = result.scalar_one_or_none()
         if device_orm:
             await self._session.delete(device_orm)

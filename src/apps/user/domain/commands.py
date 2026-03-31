@@ -27,3 +27,9 @@ class DeductUserBalance:
 @dataclass(frozen=True)
 class MarkFreeMonthUsed:
     telegram_id: int
+
+
+@dataclass(frozen=True)
+class SetUserEmail:
+    telegram_id: int
+    email: str

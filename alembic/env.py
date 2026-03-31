@@ -1,14 +1,15 @@
 from logging.config import fileConfig
 
-from sqlalchemy import create_engine, pool
+from sqlalchemy import create_engine
 
+import src.apps.auth.adapters.orm  # noqa: F401
+import src.apps.device.adapters.orm  # noqa: F401
+import src.apps.user.adapters.orm  # noqa: F401
 from alembic import context
 
 # Импортируем все ORM-модели чтобы alembic их видел
 from src.infrastructure.config import app_config
 from src.infrastructure.database.base import Base
-import src.apps.user.adapters.orm  # noqa: F401
-import src.apps.device.adapters.orm  # noqa: F401
 
 config = context.config
 

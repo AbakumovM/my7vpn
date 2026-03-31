@@ -1,6 +1,8 @@
-import structlog
+import re
 
+import structlog
 from aiogram import Bot, F, Router, types
+from aiogram.fsm.context import FSMContext
 from dishka.integrations.aiogram import FromDishka
 
 from src.apps.device.application.interactor import DeviceInteractor
@@ -13,7 +15,12 @@ from src.apps.device.domain.commands import (
 )
 from src.apps.user.application.interactor import UserInteractor
 from src.apps.user.application.interfaces.view import UserView
-from src.apps.user.domain.commands import AddReferralBonus, DeductUserBalance, MarkFreeMonthUsed
+from src.apps.user.domain.commands import (
+    AddReferralBonus,
+    DeductUserBalance,
+    MarkFreeMonthUsed,
+    SetUserEmail,
+)
 from src.common.bot.cbdata import VpnCallback
 from src.common.bot.files import get_photo_for_pay
 from src.common.bot.keyboards.keyboards import (
@@ -22,14 +29,21 @@ from src.common.bot.keyboards.keyboards import (
     get_keyboard_devices,
     get_keyboard_devices_for_del,
     get_keyboard_for_details_device,
+    get_keyboard_skip_email,
     get_keyboard_start,
     get_keyboard_tariff,
     get_keyboard_type_device,
     get_keyboard_yes_or_no_for_update,
     return_start,
 )
-from src.common.bot.keyboards.user_actions import CallbackAction, ChoiceType, PaymentStatus, VpnAction
+from src.common.bot.keyboards.user_actions import (
+    CallbackAction,
+    ChoiceType,
+    PaymentStatus,
+    VpnAction,
+)
 from src.common.bot.lexicon.text_manager import bot_repl
+from src.common.bot.states import EmailInput
 from src.infrastructure.config import app_config
 
 log = structlog.get_logger(__name__)
@@ -137,8 +151,12 @@ async def handle_device_detail(
         await call.message.answer("Устройство не найдено")
         return
     text, device_name = bot_repl.generate_device_info_message(
-        {"device_name": result.device_name, "end_date": result.end_date,
-         "amount": result.amount, "payment_date": result.payment_date}
+        {
+            "device_name": result.device_name,
+            "end_date": result.end_date,
+            "amount": result.amount,
+            "payment_date": result.payment_date,
+        }
     )
     await call.message.answer(
         text=text,
@@ -146,11 +164,98 @@ async def handle_device_detail(
     )
 
 
+EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+
+async def _show_qr_payment(
+    call: types.CallbackQuery,
+    action: str,
+    device: str,
+    duration: int,
+    referral_id: int | None,
+    payment: int,
+    balance: int,
+) -> None:
+    """Показать QR-код для оплаты (Step 5)."""
+    file_data = await get_photo_for_pay()
+    await call.message.answer_photo(
+        photo=file_data,
+        caption=bot_repl.get_approve_payment(amount=payment, payment_link=LINK),
+        reply_markup=get_keyboard_approve_payment_or_cancel(
+            action=action,
+            device=device,
+            duration=duration,
+            referral_id=referral_id,
+            payment=payment,
+            balance=balance,
+            choice=ChoiceType.STOP,
+        ),
+    )
+
+
+async def _show_qr_from_state(
+    msg_or_call: types.Message | types.CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """Восстановить данные из FSM state и показать QR."""
+    data = await state.get_data()
+    await state.clear()
+
+    message = msg_or_call.message if isinstance(msg_or_call, types.CallbackQuery) else msg_or_call
+
+    file_data = await get_photo_for_pay()
+    await message.answer_photo(
+        photo=file_data,
+        caption=bot_repl.get_approve_payment(amount=data["payment"], payment_link=LINK),
+        reply_markup=get_keyboard_approve_payment_or_cancel(
+            action=data["action"],
+            device=data["device"],
+            duration=data["duration"],
+            referral_id=data.get("referral_id"),
+            payment=data["payment"],
+            balance=data["balance"],
+            choice=ChoiceType.STOP,
+        ),
+    )
+
+
+@router.message(EmailInput.waiting_for_email)
+async def handle_email_input(
+    msg: types.Message,
+    state: FSMContext,
+    user_interactor: FromDishka[UserInteractor],
+) -> None:
+    """Обработка ввода email пользователем."""
+    email = msg.text.strip().lower() if msg.text else ""
+    if not EMAIL_RE.match(email):
+        await msg.answer(
+            "Неверный формат email. Попробуйте ещё раз или нажмите «Пропустить».",
+            reply_markup=get_keyboard_skip_email(),
+        )
+        return
+
+    await user_interactor.set_email(SetUserEmail(telegram_id=msg.from_user.id, email=email))
+    await msg.answer(f"Email {email} сохранён.")
+    await _show_qr_from_state(msg, state)
+
+
+@router.callback_query(F.data == "skip_email", EmailInput.waiting_for_email)
+async def handle_skip_email(
+    call: types.CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """Пользователь пропустил ввод email."""
+    await call.message.edit_text("Хорошо, вы можете указать email позже.")
+    await _show_qr_from_state(call, state)
+    await call.answer()
+
+
 @router.callback_query(VpnCallback.filter())
 async def handle_vpn_flow(
     call: types.CallbackQuery,
     callback_data: VpnCallback,
     bot: Bot,
+    state: FSMContext,
     interactor: FromDishka[DeviceInteractor],
     user_interactor: FromDishka[UserInteractor],
     user_view: FromDishka[UserView],
@@ -211,22 +316,41 @@ async def handle_vpn_flow(
         await call.answer()
         return
 
-    # Шаг 5: подтверждение → показ QR-оплаты
+    # Шаг 5: подтверждение → проверка email → показ QR-оплаты
     if choice == ChoiceType.YES:
         await call.message.delete()
-        file_data = await get_photo_for_pay()
-        await call.message.answer_photo(
-            photo=file_data,
-            caption=bot_repl.get_approve_payment(amount=payment, payment_link=LINK),
-            reply_markup=get_keyboard_approve_payment_or_cancel(
-                action=action,
-                device=device,
-                duration=duration,
-                referral_id=referral_id,
-                payment=payment,
-                balance=balance,
-                choice=ChoiceType.STOP,
-            ),
+
+        # Проверяем наличие email у пользователя
+        user_email = await user_view.get_email(call.from_user.id)
+        if user_email is None:
+            # Сохраняем данные flow в FSM state
+            await state.set_data(
+                {
+                    "action": action,
+                    "device": device,
+                    "duration": duration,
+                    "referral_id": referral_id,
+                    "payment": payment,
+                    "balance": balance,
+                }
+            )
+            await state.set_state(EmailInput.waiting_for_email)
+            await call.message.answer(
+                "📧 Укажите вашу электронную почту — она понадобится "
+                "для входа на сайт и получения чеков.",
+                reply_markup=get_keyboard_skip_email(),
+            )
+            await call.answer()
+            return
+
+        await _show_qr_payment(
+            call,
+            action,
+            device,
+            duration,
+            referral_id,
+            payment,
+            balance,
         )
         await call.answer()
         return
@@ -320,9 +444,7 @@ async def handle_vpn_flow(
             device_type=device,
             referral_id=referral_id,
         )
-        await user_interactor.mark_free_month_used(
-            MarkFreeMonthUsed(telegram_id=call.from_user.id)
-        )
+        await user_interactor.mark_free_month_used(MarkFreeMonthUsed(telegram_id=call.from_user.id))
         await bot.send_message(
             chat_id=ADMIN_ID,
             text=bot_repl.send_message_admin_new_user_referral(

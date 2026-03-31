@@ -7,6 +7,7 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI, Request, Response
 
 from ioc import create_container
+from src.apps.auth.controllers.http.router import router as auth_router
 from src.apps.device.controllers.http.router import router as device_router
 from src.apps.user.controllers.http.router import router as user_router
 from src.infrastructure.config import app_config
@@ -21,6 +22,7 @@ app = FastAPI(title="VPN Bot API", version="1.0.0")
 container = create_container(app_config)
 setup_dishka(container, app=app)
 
+app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(device_router)
 
