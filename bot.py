@@ -2,6 +2,8 @@ import asyncio
 import logging
 import os
 
+from typing import Any, Awaitable, Callable, Union
+
 from aiogram import BaseMiddleware, Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums.parse_mode import ParseMode
@@ -9,12 +11,92 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 
+from database.device_service import get_count_device_for_user
+from database.user_service import get_user
 from keyboards.commands import set_commands
 from handlers import router
 from utils.scheduler import setup_scheduler
 from config.config_app import app_config
 
 logger = logging.getLogger(__name__)
+
+
+SERVICE_CLOSED_MESSAGE = (
+    "🚫 К сожалению, сервис временно не принимает новых пользователей.\n\n"
+    "Если у вас есть вопросы — напишите @my7vpnadmin."
+)
+
+
+class RegistrationClosedMiddleware(BaseMiddleware):
+    """Блокирует весь доступ к боту для пользователей без устройств, если регистрация закрыта."""
+
+    async def __call__(
+        self,
+        handler: Callable[[types.TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: Union[types.Message, types.CallbackQuery],
+        data: dict[str, Any],
+    ) -> Any:
+        if app_config.service.registration_open:
+            return await handler(event, data)
+
+        telegram_id = event.from_user.id
+
+        # Админу доступ не блокируем
+        if telegram_id == app_config.bot.admin_id:
+            return await handler(event, data)
+
+        user = await get_user(telegram_id)
+        if user is None:
+            # Пользователь даже не зарегистрирован
+            if isinstance(event, types.Message):
+                await event.answer(SERVICE_CLOSED_MESSAGE)
+            else:
+                await event.message.answer(SERVICE_CLOSED_MESSAGE)
+                await event.answer()
+            return
+
+        device_count = await get_count_device_for_user(telegram_id)
+        if device_count == 0:
+            if isinstance(event, types.Message):
+                await event.answer(SERVICE_CLOSED_MESSAGE)
+            else:
+                await event.message.answer(SERVICE_CLOSED_MESSAGE)
+                await event.answer()
+            return
+
+        return await handler(event, data)
+
+
+class NewDeviceBlockMiddleware(BaseMiddleware):
+    """Блокирует добавление новых устройств для существующих пользователей."""
+
+    async def __call__(
+        self,
+        handler: Callable[[types.TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: types.CallbackQuery,
+        data: dict[str, Any],
+    ) -> Any:
+        if app_config.service.new_devices_allowed:
+            return await handler(event, data)
+
+        # Админу доступ не блокируем
+        if event.from_user.id == app_config.bot.admin_id:
+            return await handler(event, data)
+
+        # Проверяем callback_data на действия добавления нового устройства
+        if event.data and event.data.startswith("vpn:"):
+            # VpnCallback формат — проверяем action
+            parts = event.data.split(":")
+            # action — второй элемент после "vpn:"
+            if len(parts) > 1 and parts[1] in ("new", "referral"):
+                await event.message.edit_text(
+                    "🚫 К сожалению, добавление новых устройств временно приостановлено.\n\n"
+                    "Вы можете продлить подписку на существующие устройства."
+                )
+                await event.answer()
+                return
+
+        return await handler(event, data)
 
 
 class ResetStateMiddleware(BaseMiddleware):
@@ -50,6 +132,9 @@ async def main():
 
     dp.include_routers(router)
 
+    dp.message.middleware(RegistrationClosedMiddleware())
+    dp.callback_query.middleware(RegistrationClosedMiddleware())
+    dp.callback_query.middleware(NewDeviceBlockMiddleware())
     dp.message.middleware(ResetStateMiddleware())
 
     await bot.delete_webhook(

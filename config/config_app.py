@@ -19,10 +19,16 @@ class PaymentSettings(BaseModel):
     free_month: int
 
 
+class ServiceSettings(BaseModel):
+    registration_open: bool = False
+    new_devices_allowed: bool = False
+
+
 class Secrets(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     bot: BotSettings = Field(default_factory=BotSettings)
     payment: PaymentSettings = Field(default_factory=PaymentSettings)
+    service: ServiceSettings = Field(default_factory=ServiceSettings)
 
     model_config = SettingsConfigDict(
         env_file=".env",
