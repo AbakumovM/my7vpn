@@ -7,7 +7,7 @@ from io import StringIO
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
 
-from database.db_service import scheduled_payments
+from database.db_service import get_weekly_stats, scheduled_payments
 from lexicon.text_manager import bot_repl
 from config.config_app import app_config
 
@@ -44,6 +44,32 @@ async def check_pending_subscriptions(bot):
         await send_long_message(bot, ADMIN_ID, report)
     except Exception as e:
         logger.error(f"Не удалось отправить админу {ADMIN_ID}: {e}")
+
+
+async def send_weekly_report(bot):
+    try:
+        stats = await get_weekly_stats()
+
+        report = (
+            f"📊 <b>Еженедельный отчёт</b> — {datetime.now().strftime('%d.%m.%Y')}\n\n"
+            f"👥 Активных пользователей: <b>{stats['active_users']}</b>\n"
+            f"📱 Всего устройств: <b>{stats['total_devices']}</b>\n"
+        )
+
+        expiring = stats["expiring_soon"]
+        if expiring:
+            report += f"\n⏳ Подписки, истекающие на этой неделе: <b>{len(expiring)}</b>\n\n"
+            for idx, item in enumerate(expiring, 1):
+                report += (
+                    f"{idx}. {item.device_name} (ID: {item.telegram_id})\n"
+                    f"   🔚 Окончание: {item.end_date.strftime('%d.%m.%Y')}\n"
+                )
+        else:
+            report += "\n✅ На этой неделе нет истекающих подписок."
+
+        await send_long_message(bot, ADMIN_ID, report)
+    except Exception as e:
+        logger.error(f"Ошибка отправки еженедельного отчёта: {e}")
 
 
 async def send_long_message(bot: Bot, chat_id: int, text: str, max_len: int = 4000):

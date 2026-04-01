@@ -112,6 +112,45 @@ async def get_referral_code(telegram_id: int):
             raise
 
 
+async def get_weekly_stats():
+    async with AsyncSessionLocal() as session:
+        try:
+            # Количество активных пользователей (у кого есть хотя бы 1 устройство)
+            active_users = await session.scalar(
+                select(func.count(func.distinct(Device.user_id)))
+            )
+
+            # Общее количество устройств
+            total_devices = await session.scalar(
+                select(func.count(Device.id))
+            )
+
+            # Устройства с подпиской, истекающей в течение 7 дней
+            expiring_soon = await session.execute(
+                select(
+                    User.telegram_id,
+                    Device.device_name,
+                    Subscription.end_date,
+                )
+                .join(Device, User.id == Device.user_id)
+                .join(Subscription, Device.id == Subscription.device_id)
+                .where(
+                    Subscription.end_date >= func.now(),
+                    Subscription.end_date <= func.now() + text("interval '7 days'"),
+                )
+            )
+            expiring_list = expiring_soon.fetchall()
+
+            return {
+                "active_users": active_users or 0,
+                "total_devices": total_devices or 0,
+                "expiring_soon": expiring_list,
+            }
+        except Exception as e:
+            logger.error(f"Error get weekly stats: {e}")
+            raise
+
+
 async def scheduled_payments():
     async with AsyncSessionLocal() as session:
         query = text(
