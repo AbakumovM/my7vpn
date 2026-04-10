@@ -356,6 +356,12 @@ async def handle_vpn_flow(
 
     # Шаг 6a: новая подписка — оплата успешна
     if action == CallbackAction.NEW_SUB and payment_status == PaymentStatus.SUCCESS:
+        try:
+            await call.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            await call.answer()
+            return
+        await call.answer()
         result = await interactor.create_device(
             CreateDevice(
                 telegram_id=call.from_user.id,
@@ -386,11 +392,16 @@ async def handle_vpn_flow(
                 payment=payment,
             ),
         )
-        await call.answer()
         return
 
     # Шаг 6b: продление подписки
     if action == VpnAction.RENEW and payment_status == PaymentStatus.SUCCESS:
+        try:
+            await call.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            await call.answer()
+            return
+        await call.answer()
         result_renew = await interactor.renew_subscription(
             RenewSubscription(
                 device_name=callback_data.device_name or device,
@@ -419,11 +430,16 @@ async def handle_vpn_flow(
                 payment=payment,
             ),
         )
-        await call.answer()
         return
 
     # Шаг 6c: реферальный бесплатный период
     if action == VpnAction.REFERRAL:
+        try:
+            await call.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            await call.answer()
+            return
+        await call.answer()
         result_free = await interactor.create_device_free(
             CreateDeviceFree(
                 telegram_id=call.from_user.id,
@@ -458,4 +474,3 @@ async def handle_vpn_flow(
             await bot.send_message(
                 chat_id=referral_id, text=bot_repl.get_message_new_user_referral()
             )
-        await call.answer()
