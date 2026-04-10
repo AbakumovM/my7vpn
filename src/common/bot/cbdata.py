@@ -13,3 +13,19 @@ class VpnCallback(CallbackData, prefix="vpn"):
     balance: int | None = None  # остаток баланса пользователя
     choice: ChoiceType | None = None
     payment_status: PaymentStatus | None = None
+
+
+class DeviceConfCallback(CallbackData, prefix="conf"):
+    device_id: int
+
+
+class DeviceDeleteCallback(CallbackData, prefix="appr_del_device"):
+    device_id: int
+
+
+class DeviceErrorCallback(CallbackData, prefix="report__device_error"):
+    device_id: int
+
+
+class SettingsCallback(CallbackData, prefix="settings"):
+    platform: str
