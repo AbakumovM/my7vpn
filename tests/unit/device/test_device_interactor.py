@@ -184,6 +184,58 @@ async def test_create_device_deducts_balance_atomically(
 
 
 @pytest.mark.asyncio
+async def test_create_device_raises_when_insufficient_balance(
+    interactor: DeviceInteractor,
+    mock_gateway: AsyncMock,
+    mock_user_gateway: AsyncMock,
+    mock_uow: AsyncMock,
+) -> None:
+    """Если balance_to_deduct > user.balance — поднимаем InsufficientBalance."""
+    from src.apps.user.domain.exceptions import InsufficientBalance
+
+    user = User(telegram_id=123, balance=30)
+    mock_user_gateway.get_by_telegram_id.return_value = user
+    mock_gateway.get_next_seq.return_value = 1
+
+    cmd = CreateDevice(
+        telegram_id=123,
+        device_type="Android",
+        period_months=1,
+        amount=150,
+        balance_to_deduct=50,
+    )
+    with pytest.raises(InsufficientBalance):
+        await interactor.create_device(cmd)
+
+    mock_uow.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_renew_subscription_deducts_balance_atomically(
+    interactor: DeviceInteractor,
+    mock_gateway: AsyncMock,
+    mock_user_gateway: AsyncMock,
+    mock_uow: AsyncMock,
+) -> None:
+    """renew_subscription: balance deduction и продление в одном commit."""
+    from datetime import UTC, datetime
+
+    sub = Subscription(device_id=1, plan=1, start_date=datetime.now(UTC), end_date=datetime.now(UTC))
+    device = Device(user_id=123, device_name="Android 1", created_at=datetime.now(UTC), subscription=sub)
+    mock_gateway.get_by_name.return_value = device
+
+    user = User(telegram_id=123, balance=100)
+    mock_user_gateway.get_by_telegram_id.return_value = user
+
+    cmd = RenewSubscription(device_name="Android 1", period_months=1, amount=150, balance_to_deduct=30)
+    result = await interactor.renew_subscription(cmd)
+
+    assert user.balance == 70
+    mock_uow.commit.assert_called_once()
+    assert result.device_name == "Android 1"
+
+
+@pytest.mark.asyncio
 async def test_create_device_zero_balance_deduct_no_user_save(
     interactor: DeviceInteractor,
     mock_gateway: AsyncMock,

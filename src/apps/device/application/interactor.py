@@ -142,11 +142,12 @@ class DeviceInteractor:
 
         if cmd.balance_to_deduct > 0:
             renewal_user = await self._user_gateway.get_by_telegram_id(device.user_id)
-            if renewal_user is not None:
-                if renewal_user.balance < cmd.balance_to_deduct:
-                    raise InsufficientBalance(device.user_id, renewal_user.balance, cmd.balance_to_deduct)
-                renewal_user.balance -= cmd.balance_to_deduct
-                await self._user_gateway.save(renewal_user)
+            if renewal_user is None:
+                raise UserDeviceNotFound(device.user_id)
+            if renewal_user.balance < cmd.balance_to_deduct:
+                raise InsufficientBalance(device.user_id, renewal_user.balance, cmd.balance_to_deduct)
+            renewal_user.balance -= cmd.balance_to_deduct
+            await self._user_gateway.save(renewal_user)
 
         await self._gateway.save(device)
         await self._uow.commit()
