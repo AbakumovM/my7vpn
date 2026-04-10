@@ -20,7 +20,7 @@ from src.apps.user.domain.commands import (
     MarkFreeMonthUsed,
     SetUserEmail,
 )
-from src.common.bot.cbdata import VpnCallback
+from src.common.bot.cbdata import DeviceConfCallback, DeviceDeleteCallback, VpnCallback
 from src.common.bot.files import get_photo_for_pay
 from src.common.bot.keyboards.keyboards import (
     create_inline_kb,
@@ -112,13 +112,14 @@ async def handle_delete_prompt(
         )
 
 
-@router.callback_query(F.data.startswith("appr_del_device"))
+@router.callback_query(DeviceDeleteCallback.filter())
 async def handle_delete_confirm(
     call: types.CallbackQuery,
+    callback_data: DeviceDeleteCallback,
     bot: Bot,
     interactor: FromDishka[DeviceInteractor],
 ) -> None:
-    device_id = int(call.data.split(":")[1])
+    device_id = callback_data.device_id
     try:
         device_name = await interactor.delete_device(DeleteDevice(device_id=device_id))
         log.info("device_deleted", device_id=device_id, device_name=device_name)
@@ -139,12 +140,13 @@ async def handle_delete_confirm(
         )
 
 
-@router.callback_query(F.data.startswith("conf"))
+@router.callback_query(DeviceConfCallback.filter())
 async def handle_device_detail(
     call: types.CallbackQuery,
+    callback_data: DeviceConfCallback,
     device_view: FromDishka[DeviceView],
 ) -> None:
-    device_id = int(call.data.split(":")[1])
+    device_id = callback_data.device_id
     result = await device_view.get_full_info(device_id)
     if result is None:
         await call.message.answer("Устройство не найдено")

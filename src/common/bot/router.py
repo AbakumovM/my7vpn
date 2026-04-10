@@ -7,8 +7,10 @@ from src.apps.device.application.interfaces.view import DeviceView
 from src.common.bot.keyboards.keyboards import (
     create_inline_kb,
     get_keyboard_devices,
+    get_keyboard_devices_for_error,
     get_keyboard_help,
 )
+from src.common.bot.cbdata import DeviceErrorCallback, SettingsCallback
 from src.common.bot.keyboards.user_actions import CallbackAction
 from src.common.bot.lexicon.text_manager import bot_repl
 from src.infrastructure.config import app_config
@@ -29,7 +31,7 @@ async def handle_vpn_error(
         if devices:
             await call.message.answer(
                 "С каким устройством у вас возникли проблемы? Пожалуйста, выберите из списка ниже:",
-                reply_markup=get_keyboard_devices(devices, CallbackAction.DEVICE_ERROR),
+                reply_markup=get_keyboard_devices_for_error(devices),
             )
         else:
             await call.message.answer("У вас нет активных устройств")
@@ -40,12 +42,13 @@ async def handle_vpn_error(
         )
 
 
-@router.callback_query(F.data.startswith(CallbackAction.DEVICE_ERROR))
+@router.callback_query(DeviceErrorCallback.filter())
 async def handle_device_error_report(
     call: types.CallbackQuery,
+    callback_data: DeviceErrorCallback,
     bot: Bot,
 ) -> None:
-    device_id = call.data.split(":")[2]
+    device_id = callback_data.device_id
     log.info("vpn_error_reported", device_id=device_id)
     await bot.send_message(
         chat_id=ADMIN_ID,
@@ -74,15 +77,14 @@ async def handle_help_command(msg: types.Message) -> None:
     await msg.answer(bot_repl.get_help_text(), reply_markup=get_keyboard_help())
 
 
-@router.callback_query(F.data.startswith("settings:"))
-async def handle_settings(call: types.CallbackQuery) -> None:
+@router.callback_query(SettingsCallback.filter())
+async def handle_settings(call: types.CallbackQuery, callback_data: SettingsCallback) -> None:
     settings_map = {
         "android_phone": bot_repl.get_android_settings(),
         "desktop": bot_repl.get_computer_settings(),
         "ios": bot_repl.get_settings_iphone(),
     }
-    settings_type = call.data.split(":")[1]
-    text = settings_map.get(settings_type, "Настройки не найдены")
+    text = settings_map.get(callback_data.platform, "Настройки не найдены")
     await call.message.answer(
         text,
         reply_markup=get_keyboard_help(),
