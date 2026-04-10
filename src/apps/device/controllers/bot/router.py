@@ -17,7 +17,6 @@ from src.apps.user.application.interactor import UserInteractor
 from src.apps.user.application.interfaces.view import UserView
 from src.apps.user.domain.commands import (
     AddReferralBonus,
-    DeductUserBalance,
     MarkFreeMonthUsed,
     SetUserEmail,
 )
@@ -363,6 +362,7 @@ async def handle_vpn_flow(
                 device_type=device,
                 period_months=duration,
                 amount=payment,
+                balance_to_deduct=balance,
             )
         )
         log.info(
@@ -376,10 +376,6 @@ async def handle_vpn_flow(
         await call.message.answer(
             text=bot_repl.get_message_success_payment(), reply_markup=return_start()
         )
-        if balance > 0:
-            await user_interactor.deduct_balance(
-                DeductUserBalance(telegram_id=call.from_user.id, amount=balance)
-            )
         await bot.send_message(
             chat_id=ADMIN_ID,
             text=bot_repl.send_message_admin_new_device(
@@ -400,6 +396,7 @@ async def handle_vpn_flow(
                 device_name=callback_data.device_name or device,
                 period_months=duration,
                 amount=payment,
+                balance_to_deduct=balance,
             )
         )
         log.info(
@@ -412,10 +409,6 @@ async def handle_vpn_flow(
         await call.message.answer(
             text=bot_repl.get_message_success_payment_update(), reply_markup=return_start()
         )
-        if balance > 0:
-            await user_interactor.deduct_balance(
-                DeductUserBalance(telegram_id=call.from_user.id, amount=balance)
-            )
         await bot.send_message(
             chat_id=ADMIN_ID,
             text=bot_repl.send_messages_for_admin_update(

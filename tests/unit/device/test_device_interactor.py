@@ -155,3 +155,54 @@ class TestRenewSubscription:
             await interactor.renew_subscription(
                 RenewSubscription(device_name="Test", period_months=1, amount=150)
             )
+
+
+@pytest.mark.asyncio
+async def test_create_device_deducts_balance_atomically(
+    interactor: DeviceInteractor,
+    mock_gateway: AsyncMock,
+    mock_user_gateway: AsyncMock,
+    mock_uow: AsyncMock,
+) -> None:
+    """balance_to_deduct > 0 — списание в том же commit что и создание устройства."""
+    user = User(telegram_id=123, balance=100)
+    mock_user_gateway.get_by_telegram_id.return_value = user
+    mock_gateway.get_next_seq.return_value = 1
+
+    cmd = CreateDevice(
+        telegram_id=123,
+        device_type="Android",
+        period_months=1,
+        amount=150,
+        balance_to_deduct=50,
+    )
+    result = await interactor.create_device(cmd)
+
+    assert user.balance == 50
+    mock_uow.commit.assert_called_once()
+    assert result.device_name.startswith("Android")
+
+
+@pytest.mark.asyncio
+async def test_create_device_zero_balance_deduct_no_user_save(
+    interactor: DeviceInteractor,
+    mock_gateway: AsyncMock,
+    mock_user_gateway: AsyncMock,
+    mock_uow: AsyncMock,
+) -> None:
+    """balance_to_deduct == 0 — user.save не вызывается."""
+    user = User(telegram_id=123, balance=100)
+    mock_user_gateway.get_by_telegram_id.return_value = user
+    mock_gateway.get_next_seq.return_value = 1
+
+    cmd = CreateDevice(
+        telegram_id=123,
+        device_type="Android",
+        period_months=1,
+        amount=150,
+        balance_to_deduct=0,
+    )
+    await interactor.create_device(cmd)
+
+    assert user.balance == 100  # не изменился
+    mock_uow.commit.assert_called_once()

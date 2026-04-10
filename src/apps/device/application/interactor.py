@@ -20,6 +20,7 @@ from src.apps.device.domain.exceptions import (
 )
 from src.apps.device.domain.models import Device, Payment, Subscription
 from src.apps.user.application.interfaces.gateway import UserGateway
+from src.apps.user.domain.exceptions import InsufficientBalance
 from src.infrastructure.database.uow import SQLAlchemyUoW
 
 
@@ -77,6 +78,12 @@ class DeviceInteractor:
         # Прикрепляем платёж к подписке (gateway обработает)
         device.subscription.payments = [payment]  # type: ignore[attr-defined]
 
+        if cmd.balance_to_deduct > 0:
+            if user.balance < cmd.balance_to_deduct:
+                raise InsufficientBalance(cmd.telegram_id, user.balance, cmd.balance_to_deduct)
+            user.balance -= cmd.balance_to_deduct
+            await self._user_gateway.save(user)
+
         await self._gateway.save(device)
         await self._uow.commit()
         return DeviceCreatedInfo(device_name=device_name, user_telegram_id=cmd.telegram_id)
@@ -132,6 +139,14 @@ class DeviceInteractor:
         sub.end_date = base + relativedelta(months=cmd.period_months)
         sub.plan = cmd.period_months
         sub.start_date = now
+
+        if cmd.balance_to_deduct > 0:
+            renewal_user = await self._user_gateway.get_by_telegram_id(device.user_id)
+            if renewal_user is not None:
+                if renewal_user.balance < cmd.balance_to_deduct:
+                    raise InsufficientBalance(device.user_id, renewal_user.balance, cmd.balance_to_deduct)
+                renewal_user.balance -= cmd.balance_to_deduct
+                await self._user_gateway.save(renewal_user)
 
         await self._gateway.save(device)
         await self._uow.commit()
