@@ -1,7 +1,13 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from src.common.bot.cbdata import VpnCallback
+from src.common.bot.cbdata import (
+    VpnCallback,
+    DeviceConfCallback,
+    DeviceDeleteCallback,
+    DeviceErrorCallback,
+    SettingsCallback,
+)
 from src.common.bot.keyboards.user_actions import (
     ActualTariff,
     CallbackAction,
@@ -227,19 +233,34 @@ def get_keyboard_device_test():
     pass
 
 
-def get_keyboard_devices(devices: list[str], conf) -> InlineKeyboardMarkup:
+def get_keyboard_devices(devices: list, conf=None) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for device in devices:
         keyboard.inline_keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=f"{device.device_name}", callback_data=f"{conf}:{device.id}"
+                    text=device.device_name,
+                    callback_data=DeviceConfCallback(device_id=device.id).pack(),
                 )
             ]
         )
     menu = get_basic_menu()
     for i in menu:
         keyboard.inline_keyboard.append(i)
+    return keyboard
+
+
+def get_keyboard_devices_for_error(devices: list) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    for device in devices:
+        keyboard.inline_keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=device.device_name,
+                    callback_data=DeviceErrorCallback(device_id=device.id).pack(),
+                )
+            ]
+        )
     return keyboard
 
 
@@ -250,7 +271,7 @@ def get_keyboard_devices_for_del(devices: list[str]) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text=f"{device.device_name}",
-                    callback_data=f"appr_del_device:{device.id}",
+                    callback_data=DeviceDeleteCallback(device_id=device.id).pack(),
                 )
             ]
         )
@@ -442,7 +463,7 @@ def get_keyboard_help():
         [
             InlineKeyboardButton(
                 text=LEXICON_INLINE_RU[CallbackAction.SETTINGS_ANDROID_PHONE],
-                callback_data=CallbackAction.SETTINGS_ANDROID_PHONE,
+                callback_data=SettingsCallback(platform="android_phone").pack(),
             )
         ]
     )
@@ -450,7 +471,7 @@ def get_keyboard_help():
         [
             InlineKeyboardButton(
                 text=LEXICON_INLINE_RU[CallbackAction.SETTINGS_IOS],
-                callback_data=CallbackAction.SETTINGS_IOS,
+                callback_data=SettingsCallback(platform="ios").pack(),
             )
         ]
     )
@@ -458,7 +479,7 @@ def get_keyboard_help():
         [
             InlineKeyboardButton(
                 text=LEXICON_INLINE_RU[CallbackAction.SETTINGS_DESKTOP],
-                callback_data=CallbackAction.SETTINGS_DESKTOP,
+                callback_data=SettingsCallback(platform="desktop").pack(),
             )
         ]
     )
