@@ -7,6 +7,7 @@ class CreateDevice:
     device_type: str
     period_months: int
     amount: int
+    balance_to_deduct: int = 0
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class RenewSubscription:
     device_name: str
     period_months: int
     amount: int
+    balance_to_deduct: int = 0
 
 
 @dataclass(frozen=True)
