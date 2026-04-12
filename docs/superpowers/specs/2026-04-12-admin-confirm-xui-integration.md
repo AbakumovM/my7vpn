@@ -146,12 +146,17 @@ class XuiSettings(BaseModel):
 
 В `.env`:
 ```
-XUI__URL=https://myserver.com:54321
+XUI__URL=http://62.133.60.207:57385/vps7my
 XUI__USERNAME=admin
 XUI__PASSWORD=secret
 XUI__INBOUND_ID=1
-XUI__VLESS_TEMPLATE=vless://{uuid}@host:443?type=tcp&security=reality&pbk=...#{name}
+XUI__VLESS_TEMPLATE=vless://{uuid}@62.133.60.207:443/?type=grpc&serviceName=&authority=&security=reality&pbk=veL6JjshQunKETu6Rr0WNfE6rUT7tOQncje7Qc2x8mc&fp=chrome&sni=kicker.de&sid=278e&spx=%2F#{name}
 ```
+
+**Доступ к панели:**
+- Бот-сервер обращается напрямую по IP после открытия порта на VPN-сервере:
+  `ufw allow from <BOT_SERVER_IP> to any port 57385`
+- Админ заходит через SSH-туннель как раньше — не конфликтует
 
 ### XuiClient (src/infrastructure/xui/client.py)
 
