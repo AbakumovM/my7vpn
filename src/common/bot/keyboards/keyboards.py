@@ -2,11 +2,12 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from src.common.bot.cbdata import (
-    VpnCallback,
+    AdminConfirmCallback,
     DeviceConfCallback,
     DeviceDeleteCallback,
     DeviceErrorCallback,
     SettingsCallback,
+    VpnCallback,
 )
 from src.common.bot.keyboards.user_actions import (
     ActualTariff,
@@ -500,4 +501,43 @@ def get_keyboard_help():
         ]
     )
 
+    return keyboard
+
+
+def get_keyboard_admin_confirm(pending_id: int) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Подтвердить",
+                callback_data=AdminConfirmCallback(
+                    pending_id=pending_id, action="confirm"
+                ).pack(),
+            ),
+            InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=AdminConfirmCallback(
+                    pending_id=pending_id, action="reject"
+                ).pack(),
+            ),
+        ]
+    ])
+    return keyboard
+
+
+def get_keyboard_vpn_received() -> InlineKeyboardMarkup:
+    """Клавиатура после получения VPN-ключа: инструкция + главное меню."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="📋 Инструкция по подключению",
+                callback_data=CallbackAction.SUPPORT_HELP,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=LEXICON_INLINE_RU[CallbackAction.START],
+                callback_data=CallbackAction.START,
+            )
+        ],
+    ])
     return keyboard

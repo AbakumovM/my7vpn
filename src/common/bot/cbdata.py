@@ -29,3 +29,8 @@ class DeviceErrorCallback(CallbackData, prefix="report__device_error"):
 
 class SettingsCallback(CallbackData, prefix="settings"):
     platform: str
+
+
+class AdminConfirmCallback(CallbackData, prefix="adm"):
+    pending_id: int
+    action: str  # "confirm" | "reject"
