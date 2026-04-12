@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import AsyncMock
 
 from src.apps.device.application.interfaces.gateway import DeviceGateway
+from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
 from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.infrastructure.database.uow import SQLAlchemyUoW
@@ -20,6 +21,11 @@ def mock_user_gateway() -> AsyncMock:
 @pytest.fixture
 def mock_uow() -> AsyncMock:
     return AsyncMock(spec=SQLAlchemyUoW)
+
+
+@pytest.fixture
+def mock_pending_gateway() -> AsyncMock:
+    return AsyncMock(spec=PendingPaymentGateway)
 
 
 @pytest.fixture

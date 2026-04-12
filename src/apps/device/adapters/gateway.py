@@ -4,8 +4,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from src.apps.device.adapters.orm import DeviceORM, PaymentORM, SubscriptionORM
-from src.apps.device.domain.models import Device, Subscription
+from src.apps.device.adapters.orm import DeviceORM, PaymentORM, PendingPaymentORM, SubscriptionORM
+from src.apps.device.domain.models import Device, PendingPayment, Subscription
 from src.apps.user.adapters.orm import UserORM
 
 
@@ -126,3 +126,53 @@ class SQLAlchemyDeviceGateway:
             created_at=row.created_at,
             subscription=sub,
         )
+
+
+class SQLAlchemyPendingPaymentGateway:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def save(self, pending: PendingPayment) -> PendingPayment:
+        if pending.id is None:
+            orm = PendingPaymentORM(
+                user_telegram_id=pending.user_telegram_id,
+                action=pending.action,
+                device_type=pending.device_type,
+                device_name=pending.device_name,
+                duration=pending.duration,
+                amount=pending.amount,
+                balance_to_deduct=pending.balance_to_deduct,
+                created_at=pending.created_at,
+            )
+            self._session.add(orm)
+            await self._session.flush()
+            pending.id = orm.id  # type: ignore[misc]
+        return pending
+
+    async def get_by_id(self, pending_id: int) -> PendingPayment | None:
+        result = await self._session.execute(
+            select(PendingPaymentORM).where(PendingPaymentORM.id == pending_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return PendingPayment(
+            id=row.id,
+            user_telegram_id=row.user_telegram_id,
+            action=row.action,
+            device_type=row.device_type,
+            device_name=row.device_name,
+            duration=row.duration,
+            amount=row.amount,
+            balance_to_deduct=row.balance_to_deduct,
+            created_at=row.created_at,
+        )
+
+    async def delete(self, pending_id: int) -> None:
+        result = await self._session.execute(
+            select(PendingPaymentORM).where(PendingPaymentORM.id == pending_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is not None:
+            await self._session.delete(row)
+            await self._session.flush()

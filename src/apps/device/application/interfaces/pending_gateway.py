@@ -1,0 +1,9 @@
+from typing import Protocol
+
+from src.apps.device.domain.models import PendingPayment
+
+
+class PendingPaymentGateway(Protocol):
+    async def save(self, pending: PendingPayment) -> PendingPayment: ...
+    async def get_by_id(self, pending_id: int) -> PendingPayment | None: ...
+    async def delete(self, pending_id: int) -> None: ...

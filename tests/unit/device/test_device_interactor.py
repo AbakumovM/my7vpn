@@ -258,3 +258,42 @@ async def test_create_device_zero_balance_deduct_no_user_save(
 
     assert user.balance == 100  # не изменился
     mock_uow.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_create_pending_payment_saves_and_returns(
+    interactor: DeviceInteractor,
+    mock_pending_gateway: AsyncMock,
+    mock_uow: AsyncMock,
+) -> None:
+    from datetime import UTC, datetime
+    from src.apps.device.domain.models import PendingPayment
+    from src.apps.device.domain.commands import CreatePendingPayment
+
+    saved_pending = PendingPayment(
+        id=1,
+        user_telegram_id=123,
+        action="new",
+        device_type="Android",
+        duration=1,
+        amount=150,
+        balance_to_deduct=0,
+        created_at=datetime.now(UTC),
+    )
+    mock_pending_gateway.save.return_value = saved_pending
+    interactor._pending_gateway = mock_pending_gateway
+
+    cmd = CreatePendingPayment(
+        user_telegram_id=123,
+        action="new",
+        device_type="Android",
+        duration=1,
+        amount=150,
+        balance_to_deduct=0,
+    )
+    result = await interactor.create_pending_payment(cmd)
+
+    mock_pending_gateway.save.assert_called_once()
+    mock_uow.commit.assert_called_once()
+    assert result.id == 1
+    assert result.user_telegram_id == 123
