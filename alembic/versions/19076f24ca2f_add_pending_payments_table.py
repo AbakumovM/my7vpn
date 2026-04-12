@@ -29,7 +29,7 @@ def upgrade() -> None:
     sa.Column('device_name', sa.String(length=100), nullable=True),
     sa.Column('duration', sa.Integer(), nullable=False),
     sa.Column('amount', sa.Integer(), nullable=False),
-    sa.Column('balance_to_deduct', sa.Integer(), nullable=False),
+    sa.Column('balance_to_deduct', sa.Integer(), nullable=False, server_default='0'),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
