@@ -17,6 +17,7 @@ from src.apps.user.controllers.bot.router import router as user_router
 from src.common.bot.keyboards.commands import set_commands
 from src.common.bot.router import router as common_router
 from src.common.scheduler.tasks import check_pending_subscriptions
+from src.infrastructure.bot.throttling import ThrottlingMiddleware
 from src.infrastructure.config import app_config
 from src.infrastructure.logging.setup import configure_logging
 
@@ -62,6 +63,7 @@ async def main() -> None:
     dp.include_routers(user_router, device_router, common_router)
     dp.message.middleware(ResetStateMiddleware())
     dp.update.outer_middleware(LoggingMiddleware())
+    dp.update.outer_middleware(ThrottlingMiddleware())
 
     dp.startup.register(set_commands)
 
