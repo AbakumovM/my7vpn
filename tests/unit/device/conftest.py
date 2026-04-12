@@ -29,13 +29,22 @@ def mock_pending_gateway() -> AsyncMock:
 
 
 @pytest.fixture
+def mock_xui_client() -> AsyncMock:
+    return AsyncMock()
+
+
+@pytest.fixture
 def interactor(
     mock_gateway: AsyncMock,
     mock_user_gateway: AsyncMock,
     mock_uow: AsyncMock,
+    mock_pending_gateway: AsyncMock,
+    mock_xui_client: AsyncMock,
 ) -> DeviceInteractor:
     return DeviceInteractor(
         gateway=mock_gateway,
         user_gateway=mock_user_gateway,
         uow=mock_uow,
+        pending_gateway=mock_pending_gateway,
+        xui_client=mock_xui_client,
     )

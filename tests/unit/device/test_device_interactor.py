@@ -297,3 +297,60 @@ async def test_create_pending_payment_saves_and_returns(
     mock_uow.commit.assert_called_once()
     assert result.id == 1
     assert result.user_telegram_id == 123
+
+
+@pytest.mark.asyncio
+async def test_confirm_payment_new_creates_device_and_returns_vless(
+    interactor: DeviceInteractor,
+    mock_gateway: AsyncMock,
+    mock_user_gateway: AsyncMock,
+    mock_pending_gateway: AsyncMock,
+    mock_uow: AsyncMock,
+) -> None:
+    from datetime import UTC, datetime
+    from src.apps.device.domain.models import PendingPayment
+    from src.apps.device.domain.commands import ConfirmPayment
+    from src.apps.user.domain.models import User
+
+    pending = PendingPayment(
+        id=5,
+        user_telegram_id=123,
+        action="new",
+        device_type="Android",
+        duration=1,
+        amount=150,
+        balance_to_deduct=0,
+        created_at=datetime.now(UTC),
+    )
+    mock_pending_gateway.get_by_id.return_value = pending
+    mock_gateway.get_next_seq.return_value = 1
+    mock_user_gateway.get_by_telegram_id.return_value = User(telegram_id=123, balance=0)
+
+    mock_xui = AsyncMock()
+    mock_xui.add_client.return_value = "vless://uuid@host:443?params#Android_11"
+    interactor._xui_client = mock_xui
+    interactor._pending_gateway = mock_pending_gateway
+
+    result = await interactor.confirm_payment(ConfirmPayment(pending_id=5))
+
+    assert result.action == "new"
+    assert result.vless_link == "vless://uuid@host:443?params#Android_11"
+    assert result.user_telegram_id == 123
+    mock_pending_gateway.delete.assert_called_once_with(5)
+    mock_xui.add_client.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_confirm_payment_raises_if_not_found(
+    interactor: DeviceInteractor,
+    mock_pending_gateway: AsyncMock,
+    mock_uow: AsyncMock,
+) -> None:
+    from src.apps.device.domain.commands import ConfirmPayment
+    from src.apps.device.domain.exceptions import PendingPaymentNotFound
+
+    mock_pending_gateway.get_by_id.return_value = None
+    interactor._pending_gateway = mock_pending_gateway
+
+    with pytest.raises(PendingPaymentNotFound):
+        await interactor.confirm_payment(ConfirmPayment(pending_id=999))
