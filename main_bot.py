@@ -13,7 +13,13 @@ from dishka.integrations.aiogram import setup_dishka
 
 from ioc import create_container
 from src.apps.device.controllers.bot.router import router as device_router
+from src.apps.device.domain.exceptions import (
+    DeviceNotFound,
+    SubscriptionNotFound,
+    UserDeviceNotFound,
+)
 from src.apps.user.controllers.bot.router import router as user_router
+from src.apps.user.domain.exceptions import InsufficientBalance, ReferralNotFound, UserNotFound
 from src.common.bot.keyboards.commands import set_commands
 from src.common.bot.router import router as common_router
 from src.common.scheduler.tasks import check_pending_subscriptions
@@ -22,6 +28,50 @@ from src.infrastructure.config import app_config
 from src.infrastructure.logging.setup import configure_logging
 
 log = structlog.get_logger(__name__)
+
+ADMIN_ID = app_config.bot.admin_id
+
+_EXPECTED_EXCEPTIONS = (
+    UserNotFound,
+    InsufficientBalance,
+    ReferralNotFound,
+    DeviceNotFound,
+    SubscriptionNotFound,
+    UserDeviceNotFound,
+)
+
+
+async def handle_error(event: types.ErrorEvent, bot: Bot) -> None:
+    log.exception("unhandled_error", exc_info=event.exception)
+
+    update = event.update
+    chat_id: int | None = None
+    if update.message:
+        chat_id = update.message.chat.id
+    elif update.callback_query and update.callback_query.message:
+        chat_id = update.callback_query.message.chat.id
+
+    if chat_id is not None:
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                text="Произошла ошибка. Попробуй ещё раз или напиши @my7vpnadmin",
+            )
+        except Exception:
+            pass
+
+    if not isinstance(event.exception, _EXPECTED_EXCEPTIONS):
+        try:
+            await bot.send_message(
+                chat_id=ADMIN_ID,
+                text=(
+                    f"🔴 Необработанная ошибка!\n"
+                    f"Тип: {type(event.exception).__name__}\n"
+                    f"Сообщение: {event.exception}"
+                ),
+            )
+        except Exception:
+            pass
 
 
 class ResetStateMiddleware(BaseMiddleware):
@@ -56,6 +106,7 @@ async def main() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher(storage=MemoryStorage())
+    dp.errors.register(handle_error)
 
     container = create_container(app_config)
     setup_dishka(container, router=dp, auto_inject=True)
