@@ -30,3 +30,16 @@ class Device:
     vpn_config: str | None = None
     id: int | None = None
     subscription: Subscription | None = None
+
+
+@dataclass
+class PendingPayment:
+    user_telegram_id: int
+    action: str                   # "new" | "renew"
+    device_type: str              # "Android", "iOS", "TV", "Windows", "MacOS"
+    duration: int                 # месяцев
+    amount: int                   # к оплате
+    balance_to_deduct: int
+    created_at: datetime
+    device_name: str | None = None  # None для new, имя устройства для renew
+    id: int | None = None

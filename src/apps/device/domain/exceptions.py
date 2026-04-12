@@ -14,3 +14,9 @@ class UserDeviceNotFound(Exception):
     def __init__(self, telegram_id: int) -> None:
         super().__init__(f"No user found for telegram_id={telegram_id}")
         self.telegram_id = telegram_id
+
+
+class PendingPaymentNotFound(Exception):
+    def __init__(self, pending_id: int) -> None:
+        super().__init__(f"PendingPayment id={pending_id} not found")
+        self.pending_id = pending_id
