@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from src.infrastructure.database.base import Base
@@ -53,3 +53,17 @@ class PaymentORM(Base):
     payment_method = Column(String, default="карта", nullable=True)
 
     subscription = relationship("SubscriptionORM", back_populates="payments")
+
+
+class PendingPaymentORM(Base):
+    __tablename__ = "pending_payments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_telegram_id = Column(BigInteger, nullable=False)
+    action = Column(String(10), nullable=False)  # "new" | "renew"
+    device_type = Column(String(20), nullable=False)
+    device_name = Column(String(100), nullable=True)  # для renew
+    duration = Column(Integer, nullable=False)
+    amount = Column(Integer, nullable=False)
+    balance_to_deduct = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False)
