@@ -327,7 +327,7 @@ async def test_confirm_payment_new_creates_device_and_returns_vless(
     mock_user_gateway.get_by_telegram_id.return_value = User(telegram_id=123, balance=0)
 
     mock_xui = AsyncMock()
-    mock_xui.add_client.return_value = "vless://uuid@host:443?params#Android_11"
+    mock_xui.add_client.return_value = ("vless://uuid@host:443?params#Android_11", "test-uuid-1234")
     interactor._xui_client = mock_xui
     interactor._pending_gateway = mock_pending_gateway
 

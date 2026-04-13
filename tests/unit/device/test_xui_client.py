@@ -33,8 +33,35 @@ async def test_add_client_returns_vless_link() -> None:
     mock_http.__aexit__ = AsyncMock(return_value=False)
 
     with patch("src.infrastructure.xui.client.httpx.AsyncClient", return_value=mock_http):
-        link = await client.add_client("Android 11234")
+        link, uuid = await client.add_client("Android 11234")
 
     assert link.startswith("vless://")
     assert "Android 11234" in link
+    assert len(uuid) == 36  # UUID4 format
     assert mock_http.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_remove_client_calls_del_endpoint() -> None:
+    """remove_client логинится и вызывает delClient с нужным UUID."""
+    client = make_client()
+    test_uuid = "d4d1e16d-04ea-4a31-9b0a-6deaa966692f"
+
+    mock_response_login = MagicMock()
+    mock_response_login.raise_for_status = MagicMock()
+
+    mock_response_del = MagicMock()
+    mock_response_del.raise_for_status = MagicMock()
+    mock_response_del.json.return_value = {"success": True}
+
+    mock_http = AsyncMock()
+    mock_http.post = AsyncMock(side_effect=[mock_response_login, mock_response_del])
+    mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_http.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("src.infrastructure.xui.client.httpx.AsyncClient", return_value=mock_http):
+        await client.remove_client(test_uuid)
+
+    assert mock_http.post.call_count == 2
+    del_call_url = mock_http.post.call_args_list[1][0][0]
+    assert test_uuid in del_call_url

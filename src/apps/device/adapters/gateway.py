@@ -48,6 +48,7 @@ class SQLAlchemyDeviceGateway:
                 device_name=device.device_name,
                 created_at=device.created_at,
                 vpn_config=device.vpn_config,
+                vpn_client_uuid=device.vpn_client_uuid,
             )
             self._session.add(device_orm)
             await self._session.flush()
@@ -123,6 +124,7 @@ class SQLAlchemyDeviceGateway:
             user_id=row.user_id,
             device_name=row.device_name,
             vpn_config=row.vpn_config,
+            vpn_client_uuid=row.vpn_client_uuid,
             created_at=row.created_at,
             subscription=sub,
         )

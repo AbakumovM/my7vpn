@@ -28,6 +28,7 @@ class Device:
     device_name: str
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     vpn_config: str | None = None
+    vpn_client_uuid: str | None = None
     id: int | None = None
     subscription: Subscription | None = None
 

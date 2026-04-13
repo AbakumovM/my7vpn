@@ -13,6 +13,7 @@ class DeviceORM(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     device_name = Column(String, nullable=False)
     vpn_config = Column(String, nullable=True)
+    vpn_client_uuid = Column(String(36), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     user = relationship("UserORM", back_populates="devices")

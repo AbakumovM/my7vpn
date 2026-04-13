@@ -152,6 +152,8 @@ class DeviceInteractor:
             raise DeviceNotFound(device_id=cmd.device_id)
 
         device_name = device.device_name
+        if device.vpn_client_uuid:
+            await self._xui_client.remove_client(device.vpn_client_uuid)
         await self._gateway.delete(device)
         await self._uow.commit()
         return device_name
@@ -230,7 +232,7 @@ class DeviceInteractor:
 
         if pending.action == "new":
             device_name = await self._generate_device_name(pending.device_type)
-            vless_link = await self._xui_client.add_client(device_name)
+            vless_link, client_uuid = await self._xui_client.add_client(device_name)
             await self._save_device(
                 CreateDevice(
                     telegram_id=pending.user_telegram_id,
@@ -241,6 +243,7 @@ class DeviceInteractor:
                     vpn_config=vless_link,
                 ),
                 device_name=device_name,
+                client_uuid=client_uuid,
             )
         elif pending.action == "renew":
             if pending.device_name is None:
@@ -269,7 +272,9 @@ class DeviceInteractor:
             end_date=end_date,
         )
 
-    async def _save_device(self, cmd: CreateDevice, device_name: str) -> None:
+    async def _save_device(
+        self, cmd: CreateDevice, device_name: str, client_uuid: str | None = None
+    ) -> None:
         """Сохранить устройство в БД без коммита. Коммит — на стороне вызывающего."""
         user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
         if user is None:
@@ -284,6 +289,7 @@ class DeviceInteractor:
             device_name=device_name,
             created_at=now,
             vpn_config=cmd.vpn_config,
+            vpn_client_uuid=client_uuid,
             subscription=subscription,
         )
 

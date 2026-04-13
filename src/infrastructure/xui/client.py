@@ -12,14 +12,12 @@ class XuiClient:
     def __init__(self, settings: XuiSettings) -> None:
         self._settings = settings
 
-    async def add_client(self, client_name: str) -> str:
+    async def add_client(self, client_name: str) -> tuple[str, str]:
         """
-        Логинится в 3x-ui, добавляет VLESS-клиента, возвращает ссылку подключения.
+        Логинится в 3x-ui, добавляет VLESS-клиента.
 
-        Шаги:
-        1. POST {url}/login — получить сессионную куку
-        2. POST {url}/panel/api/inbounds/addClient — добавить клиента
-        3. Подставить uuid + name в vless_template
+        Returns:
+            (vless_link, client_uuid)
 
         Raises:
             httpx.HTTPStatusError: если 3x-ui вернул ошибку HTTP
@@ -29,7 +27,6 @@ class XuiClient:
         s = self._settings
 
         async with httpx.AsyncClient(base_url=s.url, timeout=15.0) as http:
-            # 1. Логин
             login_resp = await http.post(
                 "/login",
                 data={"username": s.username, "password": s.password},
@@ -37,7 +34,6 @@ class XuiClient:
             login_resp.raise_for_status()
             log.debug("xui_login_ok")
 
-            # 2. Добавить клиента
             payload = {
                 "id": s.inbound_id,
                 "settings": (
@@ -55,6 +51,32 @@ class XuiClient:
                 raise RuntimeError(f"3x-ui addClient failed: {result}")
 
         log.info("xui_client_added", client_name=client_name, uuid=client_uuid)
+        return s.vless_template.format(uuid=client_uuid, name=client_name), client_uuid
 
-        # 3. Сформировать VLESS-ссылку из шаблона
-        return s.vless_template.format(uuid=client_uuid, name=client_name)
+    async def remove_client(self, client_uuid: str) -> None:
+        """
+        Логинится в 3x-ui и удаляет VLESS-клиента по UUID.
+
+        Raises:
+            httpx.HTTPStatusError: если 3x-ui вернул ошибку HTTP
+            RuntimeError: если 3x-ui вернул success=False
+        """
+        s = self._settings
+
+        async with httpx.AsyncClient(base_url=s.url, timeout=15.0) as http:
+            login_resp = await http.post(
+                "/login",
+                data={"username": s.username, "password": s.password},
+            )
+            login_resp.raise_for_status()
+            log.debug("xui_login_ok")
+
+            del_resp = await http.post(
+                f"/panel/api/inbounds/{s.inbound_id}/delClient/{client_uuid}"
+            )
+            del_resp.raise_for_status()
+            result = del_resp.json()
+            if not result.get("success"):
+                raise RuntimeError(f"3x-ui delClient failed: {result}")
+
+        log.info("xui_client_removed", uuid=client_uuid)
