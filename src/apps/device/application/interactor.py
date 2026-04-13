@@ -152,8 +152,9 @@ class DeviceInteractor:
             raise DeviceNotFound(device_id=cmd.device_id)
 
         device_name = device.device_name
-        if device.vpn_client_uuid:
-            await self._xui_client.remove_client(device.vpn_client_uuid)
+        client_uuid = device.vpn_client_uuid or self._extract_uuid(device.vpn_config)
+        if client_uuid:
+            await self._xui_client.remove_client(client_uuid)
         await self._gateway.delete(device)
         await self._uow.commit()
         return device_name
@@ -349,3 +350,10 @@ class DeviceInteractor:
         seq = await self._gateway.get_next_seq()
         suffix = f"{seq}{random.randint(1, 5000)}"
         return f"{device_type} {suffix}"
+
+    @staticmethod
+    def _extract_uuid(vpn_config: str | None) -> str | None:
+        """Извлечь UUID из VLESS-ссылки вида vless://{uuid}@host:..."""
+        if not vpn_config or not vpn_config.startswith("vless://"):
+            return None
+        return vpn_config.removeprefix("vless://").split("@")[0]
