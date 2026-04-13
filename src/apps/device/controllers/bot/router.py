@@ -298,14 +298,14 @@ async def handle_vpn_flow(
     if balance is None:
         user_balance = await user_view.get_balance(call.from_user.id)
         finally_payment = max(payment - user_balance, 0)
-        new_balance = max(user_balance - payment, 0)
+        balance_to_deduct = min(user_balance, payment)  # сколько списать с бонусного баланса
         await call.message.edit_text(
             bot_repl.get_full_info_payment(device, duration, finally_payment, payment),
             reply_markup=get_keyboard_yes_or_no_for_update(
                 action=action,
                 device=device,
                 duration=duration,
-                balance=new_balance,
+                balance=balance_to_deduct,
                 payment=finally_payment,
                 referral_id=referral_id,
             ),
