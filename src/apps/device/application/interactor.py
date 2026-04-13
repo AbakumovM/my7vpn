@@ -231,7 +231,7 @@ class DeviceInteractor:
         if pending.action == "new":
             device_name = await self._generate_device_name(pending.device_type)
             vless_link = await self._xui_client.add_client(device_name)
-            result = await self.create_device(
+            await self._save_device(
                 CreateDevice(
                     telegram_id=pending.user_telegram_id,
                     device_type=pending.device_type,
@@ -239,14 +239,13 @@ class DeviceInteractor:
                     amount=pending.amount,
                     balance_to_deduct=pending.balance_to_deduct,
                     vpn_config=vless_link,
-                )
+                ),
+                device_name=device_name,
             )
-            # create_device already committed. Delete pending and commit again.
-            device_name = result.device_name
         elif pending.action == "renew":
             if pending.device_name is None:
                 raise DeviceNotFound(device_name="(None)")
-            result_renew = await self.renew_subscription(
+            renew_info = await self._save_renewal(
                 RenewSubscription(
                     device_name=pending.device_name,
                     period_months=pending.duration,
@@ -254,8 +253,8 @@ class DeviceInteractor:
                     balance_to_deduct=pending.balance_to_deduct,
                 )
             )
-            device_name = result_renew.device_name
-            end_date = result_renew.end_date
+            device_name = renew_info.device_name
+            end_date = renew_info.end_date
         else:
             raise ValueError(f"Unknown pending action: {pending.action}")
 
@@ -269,6 +268,59 @@ class DeviceInteractor:
             vless_link=vless_link,
             end_date=end_date,
         )
+
+    async def _save_device(self, cmd: CreateDevice, device_name: str) -> None:
+        """Сохранить устройство в БД без коммита. Коммит — на стороне вызывающего."""
+        user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
+        if user is None:
+            raise UserDeviceNotFound(cmd.telegram_id)
+
+        now = datetime.now(UTC)
+        end_date = now + relativedelta(months=cmd.period_months)
+        subscription = Subscription(device_id=0, plan=cmd.period_months, start_date=now, end_date=end_date)
+        subscription.payments = [Payment(subscription_id=0, amount=cmd.amount, payment_date=now)]  # type: ignore[attr-defined]
+        device = Device(
+            user_id=user.telegram_id,
+            device_name=device_name,
+            created_at=now,
+            vpn_config=cmd.vpn_config,
+            subscription=subscription,
+        )
+
+        if cmd.balance_to_deduct > 0:
+            if user.balance < cmd.balance_to_deduct:
+                raise InsufficientBalance(cmd.telegram_id, user.balance, cmd.balance_to_deduct)
+            user.balance -= cmd.balance_to_deduct
+            await self._user_gateway.save(user)
+
+        await self._gateway.save(device)
+
+    async def _save_renewal(self, cmd: RenewSubscription) -> SubscriptionInfo:
+        """Сохранить продление подписки без коммита. Коммит — на стороне вызывающего."""
+        device = await self._gateway.get_by_name(cmd.device_name)
+        if device is None:
+            raise DeviceNotFound(device_name=cmd.device_name)
+        if device.subscription is None:
+            raise SubscriptionNotFound(device.id or 0)
+
+        now = datetime.now(UTC)
+        sub = device.subscription
+        base = sub.end_date if sub.end_date > now else now
+        sub.end_date = base + relativedelta(months=cmd.period_months)
+        sub.plan = cmd.period_months
+        sub.start_date = now
+
+        if cmd.balance_to_deduct > 0:
+            renewal_user = await self._user_gateway.get_by_telegram_id(device.user_id)
+            if renewal_user is None:
+                raise UserDeviceNotFound(device.user_id)
+            if renewal_user.balance < cmd.balance_to_deduct:
+                raise InsufficientBalance(device.user_id, renewal_user.balance, cmd.balance_to_deduct)
+            renewal_user.balance -= cmd.balance_to_deduct
+            await self._user_gateway.save(renewal_user)
+
+        await self._gateway.save(device)
+        return SubscriptionInfo(device_name=device.device_name, end_date=sub.end_date, plan=sub.plan)
 
     async def reject_payment(self, cmd: RejectPayment) -> PendingPaymentInfo:
         pending = await self._pending_gateway.get_by_id(cmd.pending_id)

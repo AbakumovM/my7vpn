@@ -488,7 +488,7 @@ async def handle_vpn_flow(
             )
 
 
-@router.callback_query(AdminConfirmCallback.filter(F.action == "confirm"))
+@router.callback_query(AdminConfirmCallback.filter(F.action == "confirm"), F.from_user.id == ADMIN_ID)
 async def handle_admin_confirm(
     call: types.CallbackQuery,
     callback_data: AdminConfirmCallback,
@@ -536,7 +536,7 @@ async def handle_admin_confirm(
     )
 
 
-@router.callback_query(AdminConfirmCallback.filter(F.action == "reject"))
+@router.callback_query(AdminConfirmCallback.filter(F.action == "reject"), F.from_user.id == ADMIN_ID)
 async def handle_admin_reject(
     call: types.CallbackQuery,
     callback_data: AdminConfirmCallback,
@@ -547,6 +547,11 @@ async def handle_admin_reject(
         result = await interactor.reject_payment(RejectPayment(pending_id=callback_data.pending_id))
     except PendingPaymentNotFound:
         await call.message.edit_text("⚠️ Платёж не найден — возможно, уже обработан")
+        await call.answer()
+        return
+    except Exception:
+        log.exception("admin_reject_error", pending_id=callback_data.pending_id)
+        await call.message.edit_text("❌ Ошибка при отклонении. Проверьте логи.")
         await call.answer()
         return
 

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from aiogram.filters.callback_data import CallbackData
 
 from src.common.bot.keyboards.user_actions import ChoiceType, PaymentStatus, VpnAction
@@ -33,4 +35,4 @@ class SettingsCallback(CallbackData, prefix="settings"):
 
 class AdminConfirmCallback(CallbackData, prefix="adm"):
     pending_id: int
-    action: str  # "confirm" | "reject"
+    action: Literal["confirm", "reject"]
