@@ -22,6 +22,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, ".")
 
 from src.infrastructure.config import app_config
+import src.apps.user.adapters.orm  # noqa: F401 — регистрирует UserORM в маппере
 from src.apps.device.adapters.orm import DeviceORM
 
 
@@ -58,7 +59,7 @@ async def fetch_xui_clients() -> list[dict]:
 
 async def run(dry_run: bool) -> None:
     xui = app_config.xui
-    engine = create_async_engine(str(app_config.db.url))
+    engine = create_async_engine(str(app_config.database.url))
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore[call-overload]
 
     print("Получаю клиентов из 3x-ui...")
@@ -97,11 +98,7 @@ async def run(dry_run: bool) -> None:
         if not dry_run:
             await session.commit()
 
-    print(f"\nОбновлено: {updated}")
-    if not_found:
-        print(f"Не найдено в 3x-ui ({len(not_found)}):")
-        for name in not_found:
-            print(f"  - {name}")
+    print(f"\nОбновлено: {updated}  Пропущено (нет совпадения): {len(not_found)}")
 
     await engine.dispose()
 
