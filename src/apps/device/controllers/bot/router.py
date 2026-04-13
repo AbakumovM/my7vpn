@@ -8,11 +8,15 @@ from dishka.integrations.aiogram import FromDishka
 from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.device.application.interfaces.view import DeviceView
 from src.apps.device.domain.commands import (
+    ConfirmPayment,
     CreateDevice,
     CreateDeviceFree,
+    CreatePendingPayment,
     DeleteDevice,
+    RejectPayment,
     RenewSubscription,
 )
+from src.apps.device.domain.exceptions import PendingPaymentNotFound
 from src.apps.user.application.interactor import UserInteractor
 from src.apps.user.application.interfaces.view import UserView
 from src.apps.user.domain.commands import (
@@ -20,10 +24,11 @@ from src.apps.user.domain.commands import (
     MarkFreeMonthUsed,
     SetUserEmail,
 )
-from src.common.bot.cbdata import DeviceConfCallback, DeviceDeleteCallback, VpnCallback
+from src.common.bot.cbdata import AdminConfirmCallback, DeviceConfCallback, DeviceDeleteCallback, VpnCallback
 from src.common.bot.files import get_photo_for_pay
 from src.common.bot.keyboards.keyboards import (
     create_inline_kb,
+    get_keyboard_admin_confirm,
     get_keyboard_approve_payment_or_cancel,
     get_keyboard_devices,
     get_keyboard_devices_for_del,
@@ -32,6 +37,7 @@ from src.common.bot.keyboards.keyboards import (
     get_keyboard_start,
     get_keyboard_tariff,
     get_keyboard_type_device,
+    get_keyboard_vpn_received,
     get_keyboard_yes_or_no_for_update,
     return_start,
 )
@@ -356,7 +362,7 @@ async def handle_vpn_flow(
         await call.answer()
         return
 
-    # Шаг 6a: новая подписка — оплата успешна
+    # Шаг 6a: новая подписка — оплата заявлена, ждём подтверждения админа
     if action == CallbackAction.NEW_SUB and payment_status == PaymentStatus.SUCCESS:
         try:
             await call.message.edit_reply_markup(reply_markup=None)
@@ -364,39 +370,39 @@ async def handle_vpn_flow(
             await call.answer()
             return
         await call.answer()
-        result = await interactor.create_device(
-            CreateDevice(
-                telegram_id=call.from_user.id,
+        pending = await interactor.create_pending_payment(
+            CreatePendingPayment(
+                user_telegram_id=call.from_user.id,
+                action="new",
                 device_type=device,
-                period_months=duration,
+                duration=duration,
                 amount=payment,
                 balance_to_deduct=balance,
             )
         )
-        log.info(
-            "device_created",
-            device_name=result.device_name,
-            device_type=device,
-            period_months=duration,
-            amount=payment,
-        )
         await call.message.delete()
-        await call.message.answer(
-            text=bot_repl.get_message_success_payment(), reply_markup=return_start()
-        )
+        await call.message.answer("⏳ Ожидайте подтверждения оплаты администратором")
         await bot.send_message(
             chat_id=ADMIN_ID,
-            text=bot_repl.send_message_admin_new_device(
-                username=call.from_user.username,
-                user_id=call.from_user.id,
-                device=result.device_name,
-                duration=duration,
-                payment=payment,
+            text=(
+                f"💳 Новый платёж!\n"
+                f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
+                f"📱 Устройство: {device}\n"
+                f"📅 Срок: {duration} мес → {payment}₽"
             ),
+            reply_markup=get_keyboard_admin_confirm(pending.id),
+        )
+        log.info(
+            "pending_payment_created",
+            pending_id=pending.id,
+            user_id=call.from_user.id,
+            device_type=device,
+            duration=duration,
+            amount=payment,
         )
         return
 
-    # Шаг 6b: продление подписки
+    # Шаг 6b: продление — ждём подтверждения админа
     if action == VpnAction.RENEW and payment_status == PaymentStatus.SUCCESS:
         try:
             await call.message.edit_reply_markup(reply_markup=None)
@@ -404,33 +410,37 @@ async def handle_vpn_flow(
             await call.answer()
             return
         await call.answer()
-        result_renew = await interactor.renew_subscription(
-            RenewSubscription(
-                device_name=callback_data.device_name or device,
-                period_months=duration,
+        device_name_for_renew = callback_data.device_name or device
+        pending = await interactor.create_pending_payment(
+            CreatePendingPayment(
+                user_telegram_id=call.from_user.id,
+                action="renew",
+                device_type=device,
+                duration=duration,
                 amount=payment,
                 balance_to_deduct=balance,
+                device_name=device_name_for_renew,
             )
         )
-        log.info(
-            "subscription_renewed",
-            device_name=result_renew.device_name,
-            period_months=duration,
-            amount=payment,
-        )
         await call.message.delete()
-        await call.message.answer(
-            text=bot_repl.get_message_success_payment_update(), reply_markup=return_start()
-        )
+        await call.message.answer("⏳ Ожидайте подтверждения оплаты администратором")
         await bot.send_message(
             chat_id=ADMIN_ID,
-            text=bot_repl.send_messages_for_admin_update(
-                username=call.from_user.username,
-                user_id=call.from_user.id,
-                device=device,
-                duration=duration,
-                payment=payment,
+            text=(
+                f"🔄 Продление подписки!\n"
+                f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
+                f"📱 Устройство: {device_name_for_renew}\n"
+                f"📅 Срок: {duration} мес → {payment}₽"
             ),
+            reply_markup=get_keyboard_admin_confirm(pending.id),
+        )
+        log.info(
+            "pending_renewal_created",
+            pending_id=pending.id,
+            user_id=call.from_user.id,
+            device_name=device_name_for_renew,
+            duration=duration,
+            amount=payment,
         )
         return
 
@@ -476,3 +486,74 @@ async def handle_vpn_flow(
             await bot.send_message(
                 chat_id=referral_id, text=bot_repl.get_message_new_user_referral()
             )
+
+
+@router.callback_query(AdminConfirmCallback.filter(F.action == "confirm"))
+async def handle_admin_confirm(
+    call: types.CallbackQuery,
+    callback_data: AdminConfirmCallback,
+    bot: Bot,
+    interactor: FromDishka[DeviceInteractor],
+) -> None:
+    try:
+        result = await interactor.confirm_payment(ConfirmPayment(pending_id=callback_data.pending_id))
+    except PendingPaymentNotFound:
+        await call.message.edit_text("⚠️ Платёж не найден — возможно, уже обработан")
+        await call.answer()
+        return
+    except Exception:
+        log.exception("admin_confirm_error", pending_id=callback_data.pending_id)
+        await call.message.edit_text("❌ Ошибка при подтверждении. Проверьте логи.")
+        await call.answer()
+        return
+
+    if result.action == "new" and result.vless_link:
+        await bot.send_message(
+            chat_id=result.user_telegram_id,
+            text="✅ Оплата подтверждена! Ключ готов 👇",
+        )
+        await bot.send_message(
+            chat_id=result.user_telegram_id,
+            text=f"`{result.vless_link}`",
+            parse_mode="Markdown",
+            reply_markup=get_keyboard_vpn_received(),
+        )
+    else:
+        end_str = result.end_date.strftime("%d.%m.%Y") if result.end_date else "—"
+        await bot.send_message(
+            chat_id=result.user_telegram_id,
+            text=f"✅ Оплата подтверждена! Подписка продлена до {end_str}.",
+            reply_markup=return_start(),
+        )
+
+    await call.message.edit_text(f"✅ Выдано: {result.device_name}")
+    await call.answer("Готово!")
+    log.info(
+        "payment_confirmed",
+        pending_id=callback_data.pending_id,
+        device_name=result.device_name,
+        action=result.action,
+    )
+
+
+@router.callback_query(AdminConfirmCallback.filter(F.action == "reject"))
+async def handle_admin_reject(
+    call: types.CallbackQuery,
+    callback_data: AdminConfirmCallback,
+    bot: Bot,
+    interactor: FromDishka[DeviceInteractor],
+) -> None:
+    try:
+        result = await interactor.reject_payment(RejectPayment(pending_id=callback_data.pending_id))
+    except PendingPaymentNotFound:
+        await call.message.edit_text("⚠️ Платёж не найден — возможно, уже обработан")
+        await call.answer()
+        return
+
+    await bot.send_message(
+        chat_id=result.user_telegram_id,
+        text="❌ Оплата не подтверждена. Обратитесь к @my7vpnadmin",
+    )
+    await call.message.edit_text("Отклонено")
+    await call.answer()
+    log.info("payment_rejected", pending_id=callback_data.pending_id)
