@@ -37,12 +37,9 @@ class SmtpSettings(BaseModel):
     from_email: str = ""
 
 
-class XuiSettings(BaseModel):
+class RemnawaveSettings(BaseModel):
     url: str = ""
-    username: str = ""
-    password: str = ""
-    inbound_id: int = 1
-    vless_template: str = ""
+    token: str = ""
 
 
 class LoggingSettings(BaseModel):
@@ -60,7 +57,7 @@ class AppConfig(BaseSettings):
     payment: PaymentSettings = Field(default_factory=PaymentSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
-    xui: XuiSettings = Field(default_factory=XuiSettings)
+    remnawave: RemnawaveSettings = Field(default_factory=RemnawaveSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
 
     model_config = SettingsConfigDict(
