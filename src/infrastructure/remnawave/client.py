@@ -68,3 +68,61 @@ class RemnawaveClient:
             data = resp.json()["response"]
         log.info("remnawave_user_created", telegram_id=telegram_id, uuid=data["uuid"])
         return self._parse_user(data)
+
+    async def update_user(
+        self,
+        uuid: str,
+        expire_at: datetime | None = None,
+        device_limit: int | None = None,
+    ) -> RemnawaveApiUser:
+        payload: dict[str, object] = {"uuid": uuid}
+        if expire_at is not None:
+            payload["expireAt"] = expire_at.astimezone(timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%S.000Z"
+            )
+        if device_limit is not None:
+            payload["hwidDeviceLimit"] = device_limit
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.patch("/api/users", json=payload, headers=self._headers())
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+            data = resp.json()["response"]
+        log.info("remnawave_user_updated", uuid=uuid)
+        return self._parse_user(data)
+
+    async def delete_user(self, uuid: str) -> None:
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.delete(f"/api/users/{uuid}", headers=self._headers())
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+        log.info("remnawave_user_deleted", uuid=uuid)
+
+    async def get_user_by_telegram_id(self, telegram_id: int) -> RemnawaveApiUser | None:
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.get(
+                f"/api/users/by-telegram-id/{telegram_id}", headers=self._headers()
+            )
+            if resp.status_code == 404:
+                return None
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+            data = resp.json()["response"]
+        return self._parse_user(data)
+
+    async def enable_user(self, uuid: str) -> None:
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.post(
+                f"/api/users/{uuid}/actions/enable", headers=self._headers()
+            )
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+        log.info("remnawave_user_enabled", uuid=uuid)
+
+    async def disable_user(self, uuid: str) -> None:
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.post(
+                f"/api/users/{uuid}/actions/disable", headers=self._headers()
+            )
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+        log.info("remnawave_user_disabled", uuid=uuid)
