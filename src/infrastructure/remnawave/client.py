@@ -16,7 +16,7 @@ class RemnawaveAPIError(Exception):
         super().__init__(f"Remnawave API error {status_code}: {detail}")
 
 
-@dataclass
+@dataclass(frozen=True)
 class RemnawaveApiUser:
     uuid: str
     username: str
@@ -37,7 +37,7 @@ class RemnawaveClient:
             "Content-Type": "application/json",
         }
 
-    def _parse_user(self, data: dict) -> RemnawaveApiUser:  # type: ignore[type-arg]
+    def _parse_user(self, data: dict[str, object]) -> RemnawaveApiUser:
         return RemnawaveApiUser(
             uuid=data["uuid"],
             username=data["username"],

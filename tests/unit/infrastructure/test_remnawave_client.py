@@ -1,5 +1,5 @@
+import json
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -75,7 +75,6 @@ async def test_create_user_sends_correct_payload() -> None:
     await client.create_user(telegram_id=123456789, expire_at=expire_at, device_limit=3)
 
     sent = route.calls.last.request
-    import json
     payload = json.loads(sent.content)
     assert payload["username"] == "tg123456789"
     assert payload["telegramId"] == 123456789
