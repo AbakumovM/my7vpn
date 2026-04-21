@@ -367,6 +367,7 @@ def get_keyboard_approve_payment_or_cancel(
     payment: int,
     balance: int,
     choice: str,
+    device_limit: int = 1,
 ):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
@@ -376,6 +377,7 @@ def get_keyboard_approve_payment_or_cancel(
                 callback_data=VpnCallback(
                     action=action,
                     device=device,
+                    device_limit=device_limit,
                     duration=duration,
                     referral_id=referral_id,
                     payment=payment,
@@ -393,6 +395,7 @@ def get_keyboard_approve_payment_or_cancel(
                 callback_data=VpnCallback(
                     action=action,
                     device=device,
+                    device_limit=device_limit,
                     duration=duration,
                     referral_id=referral_id,
                     payment=payment,

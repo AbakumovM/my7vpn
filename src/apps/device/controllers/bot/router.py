@@ -30,6 +30,7 @@ from src.common.bot.keyboards.keyboards import (
     create_inline_kb,
     get_keyboard_admin_confirm,
     get_keyboard_approve_payment_or_cancel,
+    get_keyboard_device_count,
     get_keyboard_devices,
     get_keyboard_devices_for_del,
     get_keyboard_for_details_device,
@@ -178,6 +179,7 @@ async def _show_qr_payment(
     call: types.CallbackQuery,
     action: str,
     device: str,
+    device_limit: int,
     duration: int,
     referral_id: int | None,
     payment: int,
@@ -191,6 +193,7 @@ async def _show_qr_payment(
         reply_markup=get_keyboard_approve_payment_or_cancel(
             action=action,
             device=device,
+            device_limit=device_limit,
             duration=duration,
             referral_id=referral_id,
             payment=payment,
@@ -217,6 +220,7 @@ async def _show_qr_from_state(
         reply_markup=get_keyboard_approve_payment_or_cancel(
             action=data["action"],
             device=data["device"],
+            device_limit=data.get("device_limit", 1),
             duration=data["duration"],
             referral_id=data.get("referral_id"),
             payment=data["payment"],
@@ -269,6 +273,7 @@ async def handle_vpn_flow(
 ) -> None:
     action = callback_data.action
     device = callback_data.device
+    device_limit = callback_data.device_limit
     duration = callback_data.duration
     referral_id = callback_data.referral_id
     payment = callback_data.payment
@@ -285,11 +290,22 @@ async def handle_vpn_flow(
         await call.answer()
         return
 
+    # Шаг 1.5: выбор количества устройств
+    if device_limit is None:
+        await call.message.edit_text(
+            "Выберите количество устройств:",
+            reply_markup=get_keyboard_device_count(action=action, device=device, referral_id=referral_id),
+        )
+        await call.answer()
+        return
+
     # Шаг 2: выбор тарифа
     if duration == 0:
         await call.message.edit_text(
             "Выберете тариф, который хотите подключить:",
-            reply_markup=get_keyboard_tariff(action=action, device=device, referral_id=referral_id),
+            reply_markup=get_keyboard_tariff(
+                action=action, device=device, device_limit=device_limit, referral_id=referral_id
+            ),
         )
         await call.answer()
         return
@@ -335,6 +351,7 @@ async def handle_vpn_flow(
                 {
                     "action": action,
                     "device": device,
+                    "device_limit": device_limit,
                     "duration": duration,
                     "referral_id": referral_id,
                     "payment": payment,
@@ -354,6 +371,7 @@ async def handle_vpn_flow(
             call,
             action,
             device,
+            device_limit or 1,
             duration,
             referral_id,
             payment,
@@ -378,6 +396,7 @@ async def handle_vpn_flow(
                 duration=duration,
                 amount=payment,
                 balance_to_deduct=balance,
+                device_limit=device_limit or 1,
             )
         )
         await call.message.delete()
@@ -419,6 +438,7 @@ async def handle_vpn_flow(
                 duration=duration,
                 amount=payment,
                 balance_to_deduct=balance,
+                device_limit=device_limit or 1,
                 device_name=device_name_for_renew,
             )
         )
@@ -507,14 +527,21 @@ async def handle_admin_confirm(
         await call.answer()
         return
 
-    if result.action == "new" and result.vless_link:
+    if result.subscription_url:
+        if result.action == "new":
+            await bot.send_message(
+                chat_id=result.user_telegram_id,
+                text="✅ Оплата подтверждена! Ваша ссылка для подключения 👇",
+            )
+        else:
+            end_str = result.end_date.strftime("%d.%m.%Y") if result.end_date else "—"
+            await bot.send_message(
+                chat_id=result.user_telegram_id,
+                text=f"✅ Подписка продлена до {end_str}. Ваша ссылка для подключения 👇",
+            )
         await bot.send_message(
             chat_id=result.user_telegram_id,
-            text="✅ Оплата подтверждена! Ключ готов 👇",
-        )
-        await bot.send_message(
-            chat_id=result.user_telegram_id,
-            text=f"`{result.vless_link}`",
+            text=f"`{result.subscription_url}`",
             parse_mode="Markdown",
             reply_markup=get_keyboard_vpn_received(),
         )
@@ -522,7 +549,7 @@ async def handle_admin_confirm(
         end_str = result.end_date.strftime("%d.%m.%Y") if result.end_date else "—"
         await bot.send_message(
             chat_id=result.user_telegram_id,
-            text=f"✅ Оплата подтверждена! Подписка продлена до {end_str}.",
+            text=f"✅ Оплата подтверждена! Подписка активна до {end_str}.",
             reply_markup=return_start(),
         )
 
