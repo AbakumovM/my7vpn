@@ -8,6 +8,7 @@ class CreateDevice:
     period_months: int
     amount: int
     balance_to_deduct: int = 0
+    device_limit: int = 1
     vpn_config: str | None = None
 
 
@@ -29,6 +30,7 @@ class RenewSubscription:
     period_months: int
     amount: int
     balance_to_deduct: int = 0
+    device_limit: int = 1
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,7 @@ class CreatePendingPayment:
     duration: int
     amount: int
     balance_to_deduct: int
+    device_limit: int = 1
     device_name: str | None = None  # None для new, имя для renew
 
 

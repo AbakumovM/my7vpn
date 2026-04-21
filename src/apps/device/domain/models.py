@@ -29,6 +29,7 @@ class Device:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     vpn_config: str | None = None
     vpn_client_uuid: str | None = None
+    device_limit: int = 1
     id: int | None = None
     subscription: Subscription | None = None
 
@@ -43,4 +44,5 @@ class PendingPayment:
     balance_to_deduct: int
     created_at: datetime
     device_name: str | None = None  # None для new, имя устройства для renew
+    device_limit: int = 1
     id: int | None = None
