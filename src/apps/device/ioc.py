@@ -39,7 +39,6 @@ class DeviceProvider(Provider):
 
     @provide
     def get_remnawave_gateway(self, client: RemnawaveClient) -> RemnawaveGateway:
-        # Registered for upcoming Remnawave bot flow integration (Etap 2, step 3+)
         return RemnawaveGatewayImpl(client)
 
     @provide
@@ -49,10 +48,12 @@ class DeviceProvider(Provider):
         user_gateway: UserGateway,
         uow: SQLAlchemyUoW,
         pending_gateway: PendingPaymentGateway,
+        remnawave_gateway: RemnawaveGateway,
     ) -> DeviceInteractor:
         return DeviceInteractor(
             gateway=gateway,
             user_gateway=user_gateway,
             uow=uow,
             pending_gateway=pending_gateway,
+            remnawave_gateway=remnawave_gateway,
         )
