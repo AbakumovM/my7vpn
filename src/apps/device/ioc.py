@@ -5,15 +5,17 @@ from src.apps.device.adapters.gateway import (
     SQLAlchemyDeviceGateway,
     SQLAlchemyPendingPaymentGateway,
 )
+from src.apps.device.adapters.remnawave_gateway import RemnawaveGatewayImpl
 from src.apps.device.adapters.view import SQLAlchemyDeviceView
 from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.device.application.interfaces.gateway import DeviceGateway
 from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
+from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway
 from src.apps.device.application.interfaces.view import DeviceView
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.infrastructure.config import AppConfig
 from src.infrastructure.database.uow import SQLAlchemyUoW
-from src.infrastructure.xui.client import XuiClient
+from src.infrastructure.remnawave.client import RemnawaveClient
 
 
 class DeviceProvider(Provider):
@@ -32,8 +34,13 @@ class DeviceProvider(Provider):
         return SQLAlchemyDeviceView(session)
 
     @provide(scope=Scope.APP)
-    def get_xui_client(self, config: AppConfig) -> XuiClient:
-        return XuiClient(config.xui)
+    def get_remnawave_client(self, config: AppConfig) -> RemnawaveClient:
+        return RemnawaveClient(config.remnawave)
+
+    @provide
+    def get_remnawave_gateway(self, client: RemnawaveClient) -> RemnawaveGateway:
+        # Registered for upcoming Remnawave bot flow integration (Etap 2, step 3+)
+        return RemnawaveGatewayImpl(client)
 
     @provide
     def get_interactor(
@@ -42,12 +49,10 @@ class DeviceProvider(Provider):
         user_gateway: UserGateway,
         uow: SQLAlchemyUoW,
         pending_gateway: PendingPaymentGateway,
-        xui_client: XuiClient,
     ) -> DeviceInteractor:
         return DeviceInteractor(
             gateway=gateway,
             user_gateway=user_gateway,
             uow=uow,
             pending_gateway=pending_gateway,
-            xui_client=xui_client,
         )

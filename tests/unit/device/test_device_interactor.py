@@ -1,12 +1,13 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
 
 from src.apps.device.application.interactor import DeviceInteractor
-from src.apps.device.domain.commands import CreateDevice, DeleteDevice, RenewSubscription
-from src.apps.device.domain.exceptions import DeviceNotFound, SubscriptionNotFound, UserDeviceNotFound
-from src.apps.device.domain.models import Device, Subscription
+from src.apps.device.domain.commands import ConfirmPayment, CreateDevice, CreatePendingPayment, DeleteDevice, RenewSubscription
+from src.apps.device.domain.exceptions import DeviceNotFound, PendingPaymentNotFound, SubscriptionNotFound, UserDeviceNotFound
+from src.apps.device.domain.models import Device, PendingPayment, Subscription
+from src.apps.user.domain.exceptions import InsufficientBalance
 from src.apps.user.domain.models import User
 
 
@@ -191,8 +192,6 @@ async def test_create_device_raises_when_insufficient_balance(
     mock_uow: AsyncMock,
 ) -> None:
     """Если balance_to_deduct > user.balance — поднимаем InsufficientBalance."""
-    from src.apps.user.domain.exceptions import InsufficientBalance
-
     user = User(telegram_id=123, balance=30)
     mock_user_gateway.get_by_telegram_id.return_value = user
     mock_gateway.get_next_seq.return_value = 1
@@ -218,8 +217,6 @@ async def test_renew_subscription_deducts_balance_atomically(
     mock_uow: AsyncMock,
 ) -> None:
     """renew_subscription: balance deduction и продление в одном commit."""
-    from datetime import UTC, datetime
-
     sub = Subscription(device_id=1, plan=1, start_date=datetime.now(UTC), end_date=datetime.now(UTC))
     device = Device(user_id=123, device_name="Android 1", created_at=datetime.now(UTC), subscription=sub)
     mock_gateway.get_by_name.return_value = device
@@ -266,10 +263,6 @@ async def test_create_pending_payment_saves_and_returns(
     mock_pending_gateway: AsyncMock,
     mock_uow: AsyncMock,
 ) -> None:
-    from datetime import UTC, datetime
-    from src.apps.device.domain.models import PendingPayment
-    from src.apps.device.domain.commands import CreatePendingPayment
-
     saved_pending = PendingPayment(
         id=1,
         user_telegram_id=123,
@@ -281,7 +274,6 @@ async def test_create_pending_payment_saves_and_returns(
         created_at=datetime.now(UTC),
     )
     mock_pending_gateway.save.return_value = saved_pending
-    interactor._pending_gateway = mock_pending_gateway
 
     cmd = CreatePendingPayment(
         user_telegram_id=123,
@@ -300,18 +292,13 @@ async def test_create_pending_payment_saves_and_returns(
 
 
 @pytest.mark.asyncio
-async def test_confirm_payment_new_creates_device_and_returns_vless(
+async def test_confirm_payment_new_creates_device_and_returns_result(
     interactor: DeviceInteractor,
     mock_gateway: AsyncMock,
     mock_user_gateway: AsyncMock,
     mock_pending_gateway: AsyncMock,
     mock_uow: AsyncMock,
 ) -> None:
-    from datetime import UTC, datetime
-    from src.apps.device.domain.models import PendingPayment
-    from src.apps.device.domain.commands import ConfirmPayment
-    from src.apps.user.domain.models import User
-
     pending = PendingPayment(
         id=5,
         user_telegram_id=123,
@@ -326,18 +313,13 @@ async def test_confirm_payment_new_creates_device_and_returns_vless(
     mock_gateway.get_next_seq.return_value = 1
     mock_user_gateway.get_by_telegram_id.return_value = User(telegram_id=123, balance=0)
 
-    mock_xui = AsyncMock()
-    mock_xui.add_client.return_value = ("vless://uuid@host:443?params#Android_11", "test-uuid-1234")
-    interactor._xui_client = mock_xui
-    interactor._pending_gateway = mock_pending_gateway
-
     result = await interactor.confirm_payment(ConfirmPayment(pending_id=5))
 
     assert result.action == "new"
-    assert result.vless_link == "vless://uuid@host:443?params#Android_11"
+    assert result.vless_link is None  # временно None — Remnawave flow в следующем этапе
     assert result.user_telegram_id == 123
     mock_pending_gateway.delete.assert_called_once_with(5)
-    mock_xui.add_client.assert_called_once()
+    mock_gateway.save.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -346,11 +328,7 @@ async def test_confirm_payment_raises_if_not_found(
     mock_pending_gateway: AsyncMock,
     mock_uow: AsyncMock,
 ) -> None:
-    from src.apps.device.domain.commands import ConfirmPayment
-    from src.apps.device.domain.exceptions import PendingPaymentNotFound
-
     mock_pending_gateway.get_by_id.return_value = None
-    interactor._pending_gateway = mock_pending_gateway
 
     with pytest.raises(PendingPaymentNotFound):
         await interactor.confirm_payment(ConfirmPayment(pending_id=999))

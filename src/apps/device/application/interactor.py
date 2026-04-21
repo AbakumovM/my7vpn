@@ -27,7 +27,6 @@ from src.apps.device.domain.models import Device, Payment, PendingPayment, Subsc
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.apps.user.domain.exceptions import InsufficientBalance
 from src.infrastructure.database.uow import SQLAlchemyUoW
-from src.infrastructure.xui.client import XuiClient
 
 
 @dataclass(frozen=True)
@@ -59,7 +58,7 @@ class ConfirmPaymentResult:
     user_telegram_id: int
     device_name: str
     action: str              # "new" | "renew"
-    vless_link: str | None   # None для renew
+    vless_link: str | None   # временно None для "new" до интеграции Remnawave
     end_date: datetime | None
 
 
@@ -70,13 +69,11 @@ class DeviceInteractor:
         user_gateway: UserGateway,
         uow: SQLAlchemyUoW,
         pending_gateway: PendingPaymentGateway,
-        xui_client: XuiClient,
     ) -> None:
         self._gateway = gateway
         self._user_gateway = user_gateway
         self._uow = uow
         self._pending_gateway = pending_gateway
-        self._xui_client = xui_client
 
     async def create_device(self, cmd: CreateDevice) -> DeviceCreatedInfo:
         user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
@@ -88,26 +85,24 @@ class DeviceInteractor:
         end_date = now + relativedelta(months=cmd.period_months)
 
         subscription = Subscription(
-            device_id=0,  # заполнится после flush в gateway.save
+            device_id=0,
             plan=cmd.period_months,
             start_date=now,
             end_date=end_date,
         )
         payment = Payment(
-            subscription_id=0,  # заполнится после flush
+            subscription_id=0,
             amount=cmd.amount,
             payment_date=now,
         )
-        subscription_with_payment = subscription
         device = Device(
             user_id=user.telegram_id,
             device_name=device_name,
             created_at=now,
             vpn_config=cmd.vpn_config,
-            subscription=subscription_with_payment,
+            subscription=subscription,
         )
-        # Прикрепляем платёж к подписке (gateway обработает)
-        device.subscription.payments = [payment]  # type: ignore[attr-defined]
+        device.subscription.payments = [payment]  # type: ignore[attr-defined]  # payments not declared in Subscription dataclass, set dynamically before ORM flush
 
         if cmd.balance_to_deduct > 0:
             if user.balance < cmd.balance_to_deduct:
@@ -134,7 +129,7 @@ class DeviceInteractor:
             start_date=now,
             end_date=end_date,
         )
-        subscription.payments = [Payment(subscription_id=0, amount=0, payment_date=now)]  # type: ignore[attr-defined]
+        subscription.payments = [Payment(subscription_id=0, amount=0, payment_date=now)]  # type: ignore[attr-defined]  # payments not declared in Subscription dataclass, set dynamically before ORM flush
         device = Device(
             user_id=user.telegram_id,
             device_name=device_name,
@@ -150,11 +145,7 @@ class DeviceInteractor:
         device = await self._gateway.get_by_id(cmd.device_id)
         if device is None:
             raise DeviceNotFound(device_id=cmd.device_id)
-
         device_name = device.device_name
-        client_uuid = device.vpn_client_uuid or self._extract_uuid(device.vpn_config)
-        if client_uuid:
-            await self._xui_client.remove_client(client_uuid)
         await self._gateway.delete(device)
         await self._uow.commit()
         return device_name
@@ -168,7 +159,6 @@ class DeviceInteractor:
 
         now = datetime.now(UTC)
         sub = device.subscription
-        # Если подписка истекла — продлеваем от now, иначе — от end_date
         base = sub.end_date if sub.end_date > now else now
         sub.end_date = base + relativedelta(months=cmd.period_months)
         sub.plan = cmd.period_months
@@ -194,8 +184,6 @@ class DeviceInteractor:
     async def get_expiring_subscriptions(
         self, cmd: GetExpiringSubscriptions
     ) -> list[ExpiringSubscriptionInfo]:
-        # Делегируем в View (read-only), вызывается из контроллера планировщика
-        # Этот метод здесь для единообразия API — реальная логика в DeviceView
         raise NotImplementedError("Use DeviceView.get_expiring_today() directly")
 
     async def create_pending_payment(self, cmd: CreatePendingPayment) -> PendingPaymentInfo:
@@ -213,7 +201,7 @@ class DeviceInteractor:
         saved = await self._pending_gateway.save(pending)
         await self._uow.commit()
         return PendingPaymentInfo(
-            id=saved.id,  # type: ignore[arg-type]
+            id=saved.id,  # type: ignore[arg-type]  # id is set by ORM after save, always int at this point
             user_telegram_id=saved.user_telegram_id,
             action=saved.action,
             device_type=saved.device_type,
@@ -227,13 +215,11 @@ class DeviceInteractor:
         if pending is None:
             raise PendingPaymentNotFound(cmd.pending_id)
 
-        vless_link: str | None = None
         device_name: str
         end_date: datetime | None = None
 
         if pending.action == "new":
             device_name = await self._generate_device_name(pending.device_type)
-            vless_link, client_uuid = await self._xui_client.add_client(device_name)
             await self._save_device(
                 CreateDevice(
                     telegram_id=pending.user_telegram_id,
@@ -241,10 +227,9 @@ class DeviceInteractor:
                     period_months=pending.duration,
                     amount=pending.amount,
                     balance_to_deduct=pending.balance_to_deduct,
-                    vpn_config=vless_link,
+                    vpn_config=None,
                 ),
                 device_name=device_name,
-                client_uuid=client_uuid,
             )
         elif pending.action == "renew":
             if pending.device_name is None:
@@ -269,14 +254,11 @@ class DeviceInteractor:
             user_telegram_id=pending.user_telegram_id,
             device_name=device_name,
             action=pending.action,
-            vless_link=vless_link,
+            vless_link=None,
             end_date=end_date,
         )
 
-    async def _save_device(
-        self, cmd: CreateDevice, device_name: str, client_uuid: str | None = None
-    ) -> None:
-        """Сохранить устройство в БД без коммита. Коммит — на стороне вызывающего."""
+    async def _save_device(self, cmd: CreateDevice, device_name: str) -> None:
         user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
         if user is None:
             raise UserDeviceNotFound(cmd.telegram_id)
@@ -284,13 +266,13 @@ class DeviceInteractor:
         now = datetime.now(UTC)
         end_date = now + relativedelta(months=cmd.period_months)
         subscription = Subscription(device_id=0, plan=cmd.period_months, start_date=now, end_date=end_date)
-        subscription.payments = [Payment(subscription_id=0, amount=cmd.amount, payment_date=now)]  # type: ignore[attr-defined]
+        subscription.payments = [Payment(subscription_id=0, amount=cmd.amount, payment_date=now)]  # type: ignore[attr-defined]  # payments not declared in Subscription dataclass, set dynamically before ORM flush
         device = Device(
             user_id=user.telegram_id,
             device_name=device_name,
             created_at=now,
             vpn_config=cmd.vpn_config,
-            vpn_client_uuid=client_uuid,
+            vpn_client_uuid=None,
             subscription=subscription,
         )
 
@@ -303,7 +285,6 @@ class DeviceInteractor:
         await self._gateway.save(device)
 
     async def _save_renewal(self, cmd: RenewSubscription) -> SubscriptionInfo:
-        """Сохранить продление подписки без коммита. Коммит — на стороне вызывающего."""
         device = await self._gateway.get_by_name(cmd.device_name)
         if device is None:
             raise DeviceNotFound(device_name=cmd.device_name)
@@ -334,7 +315,7 @@ class DeviceInteractor:
         if pending is None:
             raise PendingPaymentNotFound(cmd.pending_id)
         info = PendingPaymentInfo(
-            id=pending.id,  # type: ignore[arg-type]
+            id=pending.id,  # type: ignore[arg-type]  # id is set by ORM after gateway lookup, always int at this point
             user_telegram_id=pending.user_telegram_id,
             action=pending.action,
             device_type=pending.device_type,
@@ -350,10 +331,3 @@ class DeviceInteractor:
         seq = await self._gateway.get_next_seq()
         suffix = f"{seq}{random.randint(1, 5000)}"
         return f"{device_type} {suffix}"
-
-    @staticmethod
-    def _extract_uuid(vpn_config: str | None) -> str | None:
-        """Извлечь UUID из VLESS-ссылки вида vless://{uuid}@host:..."""
-        if not vpn_config or not vpn_config.startswith("vless://"):
-            return None
-        return vpn_config.removeprefix("vless://").split("@")[0]
