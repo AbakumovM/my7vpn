@@ -49,6 +49,7 @@ class SQLAlchemyDeviceGateway:
                 created_at=device.created_at,
                 vpn_config=device.vpn_config,
                 vpn_client_uuid=device.vpn_client_uuid,
+                device_limit=device.device_limit,
             )
             self._session.add(device_orm)
             await self._session.flush()
@@ -84,6 +85,8 @@ class SQLAlchemyDeviceGateway:
                 .where(DeviceORM.id == device.id)
             )
             device_orm = result.unique().scalar_one()
+
+            device_orm.device_limit = device.device_limit
 
             if device.subscription and device_orm.subscription:
                 sub = device.subscription
@@ -125,6 +128,7 @@ class SQLAlchemyDeviceGateway:
             device_name=row.device_name,
             vpn_config=row.vpn_config,
             vpn_client_uuid=row.vpn_client_uuid,
+            device_limit=row.device_limit,
             created_at=row.created_at,
             subscription=sub,
         )
@@ -144,6 +148,7 @@ class SQLAlchemyPendingPaymentGateway:
                 duration=pending.duration,
                 amount=pending.amount,
                 balance_to_deduct=pending.balance_to_deduct,
+                device_limit=pending.device_limit,
                 created_at=pending.created_at,
             )
             self._session.add(orm)
@@ -167,6 +172,7 @@ class SQLAlchemyPendingPaymentGateway:
             duration=row.duration,
             amount=row.amount,
             balance_to_deduct=row.balance_to_deduct,
+            device_limit=row.device_limit,
             created_at=row.created_at,
         )
 

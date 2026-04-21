@@ -14,6 +14,7 @@ class DeviceORM(Base):
     device_name = Column(String, nullable=False)
     vpn_config = Column(String, nullable=True)
     vpn_client_uuid = Column(String(36), nullable=True)
+    device_limit = Column(Integer, nullable=False, default=1, server_default="1")
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     user = relationship("UserORM", back_populates="devices")
@@ -67,4 +68,5 @@ class PendingPaymentORM(Base):
     duration = Column(Integer, nullable=False)
     amount = Column(Integer, nullable=False)
     balance_to_deduct = Column(Integer, nullable=False, default=0)
+    device_limit = Column(Integer, nullable=False, default=1, server_default="1")
     created_at = Column(DateTime(timezone=True), nullable=False)
