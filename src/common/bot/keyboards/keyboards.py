@@ -119,7 +119,7 @@ def get_keyboard_type_comp(types: str = "device") -> InlineKeyboardMarkup:
 def get_keyboard_tariff(
     action: str,
     device: str,
-    device_limit: int,
+    device_limit: int = 1,
     referral_id: int | None = None,
 ) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
