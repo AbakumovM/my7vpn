@@ -59,6 +59,7 @@ def get_keyboard_type_device(action: str, referral_id: int | None = None) -> Inl
                     callback_data=VpnCallback(
                         action=action,
                         device=dev,
+                        device_limit=1 if action == VpnAction.REFERRAL else None,
                         duration=1 if action == VpnAction.REFERRAL else 0,
                         referral_id=referral_id,
                         payment=0 if action == VpnAction.REFERRAL else None,
@@ -189,7 +190,13 @@ def get_keyboard_yes_or_no() -> InlineKeyboardMarkup:
 
 
 def get_keyboard_yes_or_no_for_update(
-    action, device, duration, balance, payment, referral_id
+    action: str,
+    device: str,
+    duration: int,
+    balance: int,
+    payment: int,
+    referral_id: int | None,
+    device_limit: int = 1,
 ) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
@@ -199,6 +206,7 @@ def get_keyboard_yes_or_no_for_update(
                 callback_data=VpnCallback(
                     action=action,
                     device=device,
+                    device_limit=device_limit,
                     duration=duration,
                     referral_id=referral_id,
                     payment=payment,
@@ -211,6 +219,7 @@ def get_keyboard_yes_or_no_for_update(
                 callback_data=VpnCallback(
                     action=action,
                     device=device,
+                    device_limit=device_limit,
                     duration=duration,
                     referral_id=referral_id,
                     payment=payment,

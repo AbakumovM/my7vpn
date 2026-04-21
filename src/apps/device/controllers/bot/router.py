@@ -324,6 +324,7 @@ async def handle_vpn_flow(
                 balance=balance_to_deduct,
                 payment=finally_payment,
                 referral_id=referral_id,
+                device_limit=device_limit or 1,
             ),
         )
         await call.answer()
