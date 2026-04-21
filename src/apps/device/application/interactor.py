@@ -60,7 +60,7 @@ class ConfirmPaymentResult:
     device_name: str
     action: str              # "new" | "renew"
     subscription_url: str | None
-    end_date: datetime | None
+    end_date: datetime
 
 
 class DeviceInteractor:
@@ -239,6 +239,7 @@ class DeviceInteractor:
                     vpn_config=None,
                 ),
                 device_name=device_name,
+                end_date=end_date,
             )
         elif pending.action == "renew":
             if pending.device_name is None:
@@ -257,7 +258,7 @@ class DeviceInteractor:
         else:
             raise ValueError(f"Unknown pending action: {pending.action}")
 
-        # Remnawave: создать или обновить пользователя
+        # Remnawave: create or update user in panel
         user = await self._user_gateway.get_by_telegram_id(pending.user_telegram_id)
         if user is None:
             raise UserDeviceNotFound(pending.user_telegram_id)
@@ -277,6 +278,10 @@ class DeviceInteractor:
                 expire_at=end_date,
                 device_limit=pending.device_limit,
             )
+            if user.subscription_url is None:
+                raise ValueError(
+                    f"User {pending.user_telegram_id} has remnawave_uuid but no subscription_url"
+                )
 
         subscription_url = user.subscription_url
 
@@ -291,13 +296,12 @@ class DeviceInteractor:
             end_date=end_date,
         )
 
-    async def _save_device(self, cmd: CreateDevice, device_name: str) -> None:
+    async def _save_device(self, cmd: CreateDevice, device_name: str, end_date: datetime) -> None:
         user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
         if user is None:
             raise UserDeviceNotFound(cmd.telegram_id)
 
         now = datetime.now(UTC)
-        end_date = now + relativedelta(months=cmd.period_months)
         subscription = Subscription(device_id=0, plan=cmd.period_months, start_date=now, end_date=end_date)
         subscription.payments = [Payment(subscription_id=0, amount=cmd.amount, payment_date=now)]  # type: ignore[attr-defined]  # payments not declared in Subscription dataclass, set dynamically before ORM flush
         device = Device(

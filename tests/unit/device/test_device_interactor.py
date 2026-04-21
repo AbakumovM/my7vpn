@@ -392,6 +392,10 @@ async def test_confirm_payment_new_creates_remnawave_user_when_no_uuid(
     assert user.subscription_url == "https://sub.test/abc"
     assert result.subscription_url == "https://sub.test/abc"
     mock_uow.commit.assert_called_once()
+    call_kwargs = mock_remnawave_gateway.create_user.call_args.kwargs
+    assert call_kwargs["telegram_id"] == 123
+    assert call_kwargs["device_limit"] == 1
+    assert call_kwargs["expire_at"] > datetime.now(UTC)
 
 
 @pytest.mark.asyncio
@@ -520,4 +524,5 @@ async def test_confirm_payment_renew_updates_remnawave_when_uuid_exists(
     call_kwargs = mock_remnawave_gateway.update_user.call_args.kwargs
     assert call_kwargs["uuid"] == "rw-uuid"
     assert call_kwargs["device_limit"] == 2
+    assert call_kwargs["expire_at"] > datetime.now(UTC)
     assert result.subscription_url == "https://sub.test/url"
