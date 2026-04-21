@@ -15,6 +15,7 @@ from src.common.bot.keyboards.user_actions import (
     ChoiceType,
     DeviceType,
     PaymentStatus,
+    TARIFF_MATRIX,
     VpnAction,
 )
 from src.common.bot.lexicon.lexicon import LEXICON_INLINE_DEVICE_RU, LEXICON_INLINE_RU
@@ -73,6 +74,27 @@ def get_keyboard_type_device(action: str, referral_id: int | None = None) -> Inl
     return keyboard
 
 
+def get_keyboard_device_count(
+    action: str, device: str, referral_id: int | None = None
+) -> InlineKeyboardMarkup:
+    """Шаг 1.5: выбор количества устройств."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    for count, label in [(1, "1 устройство"), (2, "2 устройства"), (3, "3 устройства")]:
+        keyboard.inline_keyboard.append([
+            InlineKeyboardButton(
+                text=label,
+                callback_data=VpnCallback(
+                    action=action,
+                    device=device,
+                    device_limit=count,
+                    duration=0,
+                    referral_id=referral_id,
+                ).pack(),
+            )
+        ])
+    return keyboard
+
+
 def get_keyboard_type_comp(types: str = "device") -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     keyboard.inline_keyboard.append(
@@ -95,57 +117,28 @@ def get_keyboard_type_comp(types: str = "device") -> InlineKeyboardMarkup:
 
 
 def get_keyboard_tariff(
-    action: str, device: str, referral_id: int | None = None
+    action: str,
+    device: str,
+    device_limit: int,
+    referral_id: int | None = None,
 ) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [
+    prices = TARIFF_MATRIX[device_limit]
+    for months, label in [(1, "1 мес"), (3, "3 мес"), (6, "6 мес"), (12, "12 мес")]:
+        price = prices[months]
+        keyboard.inline_keyboard.append([
             InlineKeyboardButton(
-                text=f"1 мес {ActualTariff.MONTH_1} руб.",
+                text=f"{label} — {price} руб.",
                 callback_data=VpnCallback(
                     action=action,
                     device=device,
-                    duration=1,
+                    device_limit=device_limit,
+                    duration=months,
                     referral_id=referral_id,
-                    payment=ActualTariff.MONTH_1,
+                    payment=price,
                 ).pack(),
-            ),
-            InlineKeyboardButton(
-                text=f"3 мес {ActualTariff.MONTH_3} руб.",
-                callback_data=VpnCallback(
-                    action=action,
-                    device=device,
-                    duration=3,
-                    referral_id=referral_id,
-                    payment=ActualTariff.MONTH_3,
-                ).pack(),
-            ),
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=f"6 мес {ActualTariff.MONTH_6} руб.",
-                callback_data=VpnCallback(
-                    action=action,
-                    device=device,
-                    duration=6,
-                    referral_id=referral_id,
-                    payment=ActualTariff.MONTH_6,
-                ).pack(),
-            ),
-            InlineKeyboardButton(
-                text=f"12 мес {ActualTariff.MONTH_12} руб.",
-                callback_data=VpnCallback(
-                    action=action,
-                    device=device,
-                    duration=12,
-                    referral_id=referral_id,
-                    payment=ActualTariff.MONTH_12,
-                ).pack(),
-            ),
-        ]
-    )
+            )
+        ])
     return keyboard
 
 

@@ -63,3 +63,11 @@ class ActualTariff(IntEnum):
 class PaymentStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
+
+
+# Цены по матрице (device_limit, months) → цена в рублях
+TARIFF_MATRIX: dict[int, dict[int, int]] = {
+    1: {1: 150,  3: 400,  6: 700,  12: 1200},
+    2: {1: 250,  3: 650,  6: 1100, 12: 1900},
+    3: {1: 350,  3: 900,  6: 1500, 12: 2600},
+}
