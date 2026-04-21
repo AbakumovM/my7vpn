@@ -1,11 +1,19 @@
 import uuid as uuid_lib
+from dataclasses import dataclass
 
 import httpx
 import structlog
 
-from src.infrastructure.config import XuiSettings
-
 log = structlog.get_logger(__name__)
+
+
+@dataclass
+class XuiSettings:
+    url: str = ""
+    username: str = ""
+    password: str = ""
+    inbound_id: int = 1
+    vless_template: str = ""
 
 
 class XuiClient:
