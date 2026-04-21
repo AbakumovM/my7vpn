@@ -53,6 +53,8 @@ class SQLAlchemyUserGateway:
         row.free_months = user.free_months
         row.referral_code = user.referral_code
         row.referred_by = user.referred_by
+        row.remnawave_uuid = user.remnawave_uuid
+        row.subscription_url = user.subscription_url
         await self._session.flush()
 
     @staticmethod
@@ -64,5 +66,7 @@ class SQLAlchemyUserGateway:
             free_months=row.free_months,
             referral_code=row.referral_code,
             referred_by=row.referred_by,
+            remnawave_uuid=row.remnawave_uuid,
+            subscription_url=row.subscription_url,
             created_at=row.created_at,
         )
