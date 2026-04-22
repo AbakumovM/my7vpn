@@ -1,3 +1,5 @@
+from typing import Any
+
 import structlog
 from aiogram import Bot
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
@@ -6,7 +8,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.apps.device.application.interactor import ConfirmPaymentResult, DeviceInteractor
-from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
 from src.apps.device.domain.commands import ConfirmPayment
 from src.apps.device.domain.exceptions import PendingPaymentNotFound
 from src.common.bot.keyboards.keyboards import get_keyboard_vpn_received, return_start
@@ -23,7 +24,7 @@ router = APIRouter(
 
 class YooKassaWebhook(BaseModel):
     event: str
-    object: dict
+    object: dict[str, Any]
 
 
 @router.post("/webhook")
@@ -31,13 +32,12 @@ async def yookassa_webhook(
     body: YooKassaWebhook,
     request: Request,
     interactor: FromDishka[DeviceInteractor],
-    pending_gateway: FromDishka[PendingPaymentGateway],
 ) -> JSONResponse:
     if body.event != "payment.succeeded":
         return JSONResponse(content={"status": "ignored"})
 
     payment_id: str = body.object.get("id", "")
-    metadata: dict = body.object.get("metadata", {})
+    metadata: dict[str, Any] = body.object.get("metadata", {})
     pending_id_str: str = metadata.get("pending_id", "")
 
     if not pending_id_str.isdigit():
@@ -45,12 +45,6 @@ async def yookassa_webhook(
         return JSONResponse(content={"status": "ignored"})
 
     pending_id = int(pending_id_str)
-
-    # Идемпотентность: если pending уже удалён — уже обработали
-    pending = await pending_gateway.get_by_id(pending_id)
-    if pending is None:
-        log.info("yookassa_already_processed", pending_id=pending_id)
-        return JSONResponse(content={"status": "already_processed"})
 
     # Верификация: перепроверяем статус через API ЮKassa
     yookassa_client = YooKassaClient(app_config.yookassa)
@@ -65,20 +59,14 @@ async def yookassa_webhook(
         return JSONResponse(content={"status": "not_succeeded"})
 
     # Проверка суммы
-    paid = float(body.object.get("amount", {}).get("value", "0"))
-    expected = float(pending.amount)
-    if paid < expected:
-        bot: Bot = request.app.state.bot
-        await bot.send_message(
-            chat_id=app_config.bot.admin_id,
-            text=(
-                f"⚠️ Недоплата #{pending_id}: "
-                f"ожидалось {expected}₽, получено {paid}₽\n"
-                f"payment_id: {payment_id}"
-            ),
-        )
-        log.warning("yookassa_underpayment", pending_id=pending_id, paid=paid, expected=expected)
-        return JSONResponse(content={"status": "underpayment"})
+    try:
+        paid_str = body.object.get("amount", {}).get("value", "0")
+        paid = float(paid_str)
+    except (ValueError, TypeError):
+        log.warning("yookassa_invalid_amount", payment_id=payment_id)
+        return JSONResponse(content={"status": "invalid_amount"})
+
+    bot: Bot = request.app.state.bot
 
     # Подтверждаем платёж
     try:
@@ -90,7 +78,6 @@ async def yookassa_webhook(
         return JSONResponse(content={"status": "error"})
 
     # Уведомляем пользователя
-    bot = request.app.state.bot
     await _notify_user(bot, result)
 
     # Уведомляем админа (информационно, без кнопок)
