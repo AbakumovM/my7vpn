@@ -49,6 +49,12 @@ def create_inline_kb(width: int, *args: str, **kwargs: str) -> InlineKeyboardMar
     return kb_builder.as_markup()
 
 
+def get_keyboard_payment_link() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🏠 В меню", callback_data="start")]]
+    )
+
+
 def get_keyboard_type_device(action: str, referral_id: int | None = None) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for dev in DeviceType:

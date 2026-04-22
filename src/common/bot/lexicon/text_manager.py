@@ -73,6 +73,16 @@ class TextManager:
         return message, device_name
 
     @staticmethod
+    def get_approve_payment_link(amount: int, confirmation_url: str) -> str:
+        return (
+            f"💳 <b>Оплата подписки</b>\n\n"
+            f"Сумма: <b>{amount}₽</b>\n\n"
+            f'<a href="{confirmation_url}">👉 Ссылка для оплаты</a>\n\n'
+            f"✅ После оплаты подписка активируется автоматически. "
+            f"Ничего нажимать не нужно!"
+        )
+
+    @staticmethod
     def get_approve_payment(amount, payment_link):
         return (
             f"💳 <b>Оплата подписки</b>\n\n"

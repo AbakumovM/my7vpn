@@ -34,6 +34,7 @@ from src.common.bot.keyboards.keyboards import (
     get_keyboard_devices,
     get_keyboard_devices_for_del,
     get_keyboard_for_details_device,
+    get_keyboard_payment_link,
     get_keyboard_skip_email,
     get_keyboard_start,
     get_keyboard_tariff,
@@ -42,6 +43,7 @@ from src.common.bot.keyboards.keyboards import (
     get_keyboard_yes_or_no_for_update,
     return_start,
 )
+from src.infrastructure.yookassa.client import YooKassaClient
 from src.common.bot.keyboards.user_actions import (
     CallbackAction,
     ChoiceType,
@@ -230,11 +232,47 @@ async def _show_qr_from_state(
     )
 
 
+async def _show_payment_link(
+    msg_or_call: types.Message | types.CallbackQuery,
+    interactor: DeviceInteractor,
+    action: str,
+    device: str,
+    device_limit: int,
+    duration: int,
+    amount: int,
+    balance: int,
+    device_name: str | None,
+    user_telegram_id: int,
+) -> None:
+    """Создать pending, получить ссылку ЮKassa и отправить пользователю."""
+    pending = await interactor.create_pending_payment(
+        CreatePendingPayment(
+            user_telegram_id=user_telegram_id,
+            action=action,
+            device_type=device,
+            duration=duration,
+            amount=amount,
+            balance_to_deduct=balance,
+            device_limit=device_limit,
+            device_name=device_name,
+        )
+    )
+    yookassa_client = YooKassaClient(app_config.yookassa)
+    created = await yookassa_client.create_payment(amount=amount, pending_id=pending.id)
+
+    message = msg_or_call.message if isinstance(msg_or_call, types.CallbackQuery) else msg_or_call
+    await message.answer(
+        bot_repl.get_approve_payment_link(amount=amount, confirmation_url=created.confirmation_url),
+        reply_markup=get_keyboard_payment_link(),
+    )
+
+
 @router.message(EmailInput.waiting_for_email)
 async def handle_email_input(
     msg: types.Message,
     state: FSMContext,
     user_interactor: FromDishka[UserInteractor],
+    interactor: FromDishka[DeviceInteractor],
 ) -> None:
     """Обработка ввода email пользователем."""
     email = msg.text.strip().lower() if msg.text else ""
@@ -247,17 +285,50 @@ async def handle_email_input(
 
     await user_interactor.set_email(SetUserEmail(telegram_id=msg.from_user.id, email=email))
     await msg.answer(f"Email {email} сохранён.")
-    await _show_qr_from_state(msg, state)
+
+    if app_config.yookassa.enabled:
+        data = await state.get_data()
+        await state.clear()
+        await _show_payment_link(
+            msg, interactor,
+            action=data["action"],
+            device=data["device"],
+            device_limit=data.get("device_limit", 1),
+            duration=data["duration"],
+            amount=data["payment"],
+            balance=data["balance"],
+            device_name=data.get("device_name"),
+            user_telegram_id=msg.from_user.id,
+        )
+    else:
+        await _show_qr_from_state(msg, state)
 
 
 @router.callback_query(F.data == "skip_email", EmailInput.waiting_for_email)
 async def handle_skip_email(
     call: types.CallbackQuery,
     state: FSMContext,
+    interactor: FromDishka[DeviceInteractor],
 ) -> None:
     """Пользователь пропустил ввод email."""
     await call.message.edit_text("Хорошо, вы можете указать email позже.")
-    await _show_qr_from_state(call, state)
+
+    if app_config.yookassa.enabled:
+        data = await state.get_data()
+        await state.clear()
+        await _show_payment_link(
+            call, interactor,
+            action=data["action"],
+            device=data["device"],
+            device_limit=data.get("device_limit", 1),
+            duration=data["duration"],
+            amount=data["payment"],
+            balance=data["balance"],
+            device_name=data.get("device_name"),
+            user_telegram_id=call.from_user.id,
+        )
+    else:
+        await _show_qr_from_state(call, state)
     await call.answer()
 
 
@@ -357,6 +428,7 @@ async def handle_vpn_flow(
                     "referral_id": referral_id,
                     "payment": payment,
                     "balance": balance,
+                    "device_name": callback_data.device_name,
                 }
             )
             await state.set_state(EmailInput.waiting_for_email)
@@ -364,6 +436,21 @@ async def handle_vpn_flow(
                 "📧 Укажите вашу электронную почту — она понадобится "
                 "для входа на сайт и получения чеков.",
                 reply_markup=get_keyboard_skip_email(),
+            )
+            await call.answer()
+            return
+
+        if app_config.yookassa.enabled:
+            await _show_payment_link(
+                call, interactor,
+                action=action,
+                device=device,
+                device_limit=device_limit or 1,
+                duration=duration,
+                amount=payment,
+                balance=balance,
+                device_name=callback_data.device_name,
+                user_telegram_id=call.from_user.id,
             )
             await call.answer()
             return
