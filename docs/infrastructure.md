@@ -73,6 +73,8 @@ create_container(config: AppConfig) -> AsyncContainer
 | database | `DatabaseSettings` | `url` | `DATABASE__` |
 | bot | `BotSettings` | `token`, `bot_name`, `admin_id` | `BOT__` |
 | payment | `PaymentSettings` | `payment_url`, `payment_qr`, `free_month` | `PAYMENT__` |
+| remnawave | `RemnawaveSettings` | `url`, `token` | `REMNAWAVE__` |
+| yookassa | `YooKassaSettings` | `shop_id`, `secret_key`, `return_url`, `enabled` (bool, default false) | `YOOKASSA__` |
 | auth | `AuthSettings` | `jwt_secret`, `jwt_expire_minutes` (24h), `otp_expire_minutes` (5), `bot_token_expire_minutes` (10), `site_url` | `AUTH__` |
 | smtp | `SmtpSettings` | `host`, `port`, `username`, `password`, `from_email` | `SMTP__` |
 | logging | `LoggingSettings` | `log_level`, `log_json`, `log_to_file`, `log_dir` | `LOGGING__` |
@@ -155,11 +157,12 @@ scheduler.add_job(check_pending_subscriptions, "cron", hour=9, ...)
 
 ```
 1. Загрузка config
-2. Создание FastAPI app
-3. Создание Dishka container + setup_dishka
-4. Подключение роутеров (auth, user, device)
-5. HTTP middleware (request logging)
-6. Health check endpoint
+2. Lifespan: создаёт Bot (для уведомлений из webhook), кладёт в app.state.bot
+3. Создание FastAPI app с lifespan
+4. Создание Dishka container + setup_dishka
+5. Подключение роутеров (auth, user, device, yookassa)
+6. HTTP middleware (request logging)
+7. Health check endpoint
 ```
 
 ---
@@ -178,6 +181,8 @@ scheduler.add_job(check_pending_subscriptions, "cron", hour=9, ...)
 | `src/infrastructure/database/uow.py` | Unit of Work |
 | `src/infrastructure/database/provider.py` | Dishka DatabaseProvider |
 | `src/infrastructure/logging/setup.py` | structlog конфигурация |
+| `src/infrastructure/remnawave/` | Remnawave API клиент (`RemnawaveClient`, dataclasses) |
+| `src/infrastructure/yookassa/client.py` | ЮKassa API клиент (`YooKassaClient`, `CreatedPayment`) |
 | `src/common/scheduler/tasks.py` | Планировщик подписок |
 | `src/common/bot/cbdata.py` | VpnCallback (callback data) |
 | `src/common/bot/states.py` | FSM states |
