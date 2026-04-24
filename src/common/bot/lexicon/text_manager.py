@@ -1,15 +1,22 @@
-from datetime import datetime
-
 from src.infrastructure.config import app_config
 
 
 class TextManager:
     @staticmethod
-    def get_start_message(user_name):
+    def get_main_menu_active(user_name: str, end_date: str, used: int, limit: int, balance: int) -> str:
         return (
             f"👋 Привет, {user_name}!\n\n"
-            "У вас пока нет активных устройств. Не беда! Давайте это исправим и настроим VPN для вашего устройства. 🚀\n\n"
-            "📱 Выберите тип устройства, для которого вы хотите настроить VPN:\n"
+            f"✅ Подписка активна до {end_date}\n"
+            f"📱 Устройств: {used} / {limit}\n"
+            f"💰 Баланс: {balance}₽"
+        )
+
+    @staticmethod
+    def get_main_menu_new(user_name: str) -> str:
+        return (
+            f"👋 Привет, {user_name}!\n\n"
+            f"У вас пока нет активной подписки.\n"
+            f"Подключите VPN и защитите свои данные! 🚀"
         )
 
     @staticmethod
@@ -26,51 +33,123 @@ class TextManager:
         return "Выберите тип устройства, для которого вы хотите настроить VPN:"
 
     @staticmethod
-    def get_start(user_name, count, balance):
+    def get_subscription_info(
+        end_date: str, device_limit: int, last_payment: int | None, subscription_url: str | None,
+        days_left: int | None = None,
+    ) -> str:
+        text = "🔐 <b>Ваша подписка</b>\n\n"
+
+        if days_left is not None and days_left <= 7:
+            text += f"📅 Активна до: <b>{end_date}</b> ({days_left} дн.!)\n"
+            text += "⚠️ <b>Продлите подписку, чтобы VPN не отключился</b>\n\n"
+        else:
+            text += f"📅 Активна до: <b>{end_date}</b>\n"
+
+        text += f"📱 Устройств: <b>{device_limit}</b>\n"
+        if last_payment is not None:
+            text += f"💳 Последний платёж: <b>{last_payment}₽</b>\n"
+
+        if subscription_url:
+            text += f"\n🔗 <b>Ваш ключ для happ:</b>\n<code>{subscription_url}</code>"
+
+        return text
+
+    @staticmethod
+    def get_no_subscription() -> str:
+        return "У вас пока нет активной подписки."
+
+    @staticmethod
+    def get_choose_device_count() -> str:
         return (
-            f"👋 Привет, {user_name}!\n\n"
-            f"📱 <b>Активных устройств:</b> {count}\n\n"
-            f"💰 <b>Ваш баланс за приведенных друзей:</b> {balance}₽\n\n"
-            "Полную информацию о устройстве и подписке вы сможете найти, выбрав конкретное устройство.\n\n"
-            "Важно! Заработайте 50₽ на баланс за каждого друга! Ваши друзья получат 7 дней подписки для одного устройства бесплатно.\n\n"
-            "🔒 Пользуйтесь нашим VPN для защиты ваших данных в интернете\n\n"
-            "❓ Встретили проблемы? Наши специалисты готовы помочь 24/7\n\n"
+            "📱 <b>Сколько устройств подключить?</b>\n\n"
+            "Одна подписка — на все ваши устройства: телефон, компьютер, телевизор."
         )
 
     @staticmethod
-    def get_message_devices(count: int):
-        device_words = {
-            0: "устройств",
-            1: "устройство",
-            2: "устройства",
-            3: "устройства",
-            4: "устройства",
-            5: "устройств",
+    def get_choose_tariff(device_limit: int) -> str:
+        device_emoji = "📱" * device_limit
+        device_word = {1: "устройство", 2: "устройства", 3: "устройства"}
+        return (
+            f"⏳ <b>Выберите срок подписки</b>\n\n"
+            f"{device_emoji} {device_limit} {device_word[device_limit]}"
+        )
+
+    @staticmethod
+    def get_confirm_payment(
+        device_limit: int, duration: int, price: int, bonus: int, total: int,
+    ) -> str:
+        month_word = {1: "1 месяц", 3: "3 месяца", 6: "6 месяцев", 12: "12 месяцев"}
+        text = (
+            f"🔐 <b>Подтвердите подписку</b>\n\n"
+            f"📱 Устройств: <b>{device_limit}</b>\n"
+            f"⏳ Срок: <b>{month_word.get(duration, f'{duration} мес')}</b>\n"
+            f"💰 Стоимость: <b>{price}₽</b>\n"
+        )
+        if bonus > 0:
+            text += f"🎁 Бонус: <b>-{bonus}₽</b>\n"
+        text += f"\n💳 К оплате: <b>{total}₽</b>"
+        return text
+
+    @staticmethod
+    def get_friends_screen(invited_count: int, total_earned: int, balance: int) -> str:
+        return (
+            f"👫 <b>Пригласи друга</b>\n\n"
+            f"Ты получаешь <b>50₽</b>, друг — <b>7 дней VPN бесплатно</b>\n\n"
+            f"📊 <b>Твоя статистика:</b>\n"
+            f"Приглашено: <b>{invited_count}</b>\n"
+            f"Заработано: <b>{total_earned}₽</b>\n"
+            f"💰 Баланс: <b>{balance}₽</b>"
+        )
+
+    @staticmethod
+    def get_instruction(platform: str) -> str:
+        instructions = {
+            "android_phone": (
+                "📱 <b>Подключение на Android</b>\n\n"
+                "1️⃣ Скачайте <b>happ</b>:\n"
+                '<a href="https://play.google.com/store/apps/details?id=app.hiddify.com">→ Google Play</a>\n\n'
+                "2️⃣ Откройте приложение\n\n"
+                "3️⃣ Нажмите <b>➕</b> и вставьте ваш ключ подписки\n\n"
+                "4️⃣ Нажмите <b>«Подключиться»</b>\n\n"
+                "✅ <b>Готово!</b> VPN активен."
+            ),
+            "ios": (
+                "🍏 <b>Подключение на iPhone / iPad</b>\n\n"
+                "1️⃣ Скачайте <b>happ</b>:\n"
+                '<a href="https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532">→ App Store</a>\n\n'
+                "2️⃣ Откройте приложение\n\n"
+                "3️⃣ Нажмите <b>➕</b> и вставьте ваш ключ подписки\n\n"
+                "4️⃣ Нажмите <b>«Подключиться»</b>\n\n"
+                "✅ <b>Готово!</b> VPN активен."
+            ),
+            "windows": (
+                "💻 <b>Подключение на Windows</b>\n\n"
+                "1️⃣ Скачайте <b>happ</b>:\n"
+                '<a href="https://apps.microsoft.com/detail/9pdfnl3qv2s5">→ Microsoft Store</a>\n\n'
+                "2️⃣ Установите и откройте приложение\n\n"
+                "3️⃣ Нажмите <b>➕</b> и вставьте ваш ключ подписки\n\n"
+                "4️⃣ Нажмите <b>«Подключиться»</b>\n\n"
+                "✅ <b>Готово!</b> VPN активен."
+            ),
+            "macos": (
+                "💻 <b>Подключение на MacOS</b>\n\n"
+                "1️⃣ Скачайте <b>happ</b>:\n"
+                '<a href="https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532">→ App Store</a>\n\n'
+                "2️⃣ Установите и откройте приложение\n\n"
+                "3️⃣ Нажмите <b>➕</b> и вставьте ваш ключ подписки\n\n"
+                "4️⃣ Нажмите <b>«Подключиться»</b>\n\n"
+                "✅ <b>Готово!</b> VPN активен."
+            ),
+            "tv": (
+                "📺 <b>Подключение на Android TV</b>\n\n"
+                "1️⃣ Скачайте <b>happ</b> из Google Play на ТВ\n\n"
+                "2️⃣ Откройте приложение\n\n"
+                "3️⃣ Добавьте ваш ключ подписки\n\n"
+                "4️⃣ Нажмите <b>«Подключиться»</b>\n\n"
+                "✅ <b>Готово!</b> VPN активен."
+            ),
         }
-        return f"<b>У вас активно {count} {device_words.get(count)}, цена зависит от выбранного вами тарифа.</b>\nПодробную информацию о стоимости вы сможете увидеть, выбрав нужное устройство.\n\n❌ <b>Важно!</b> Удаляйте из бота устройства, которые вы не используете, чтобы не платить за них абонентскую плату.\n\n👇 <b>Выберите нужное устройство из списка ниже, чтобы получить информацию о нем:</b>"
-
-    @staticmethod
-    def generate_device_info_message(data: dict):
-        device_name = data["device_name"]
-        end_date = data["end_date"]
-        amount = data["amount"]
-        payment_date = data["payment_date"]
-        message = (
-            f"📱 <b>Информация об устройстве:</b> {device_name}\n\n"
-            f"🗓 <b>Дата окончания подписки:</b> {end_date}\n"
-            f"💳 <b>Сумма последнего платежа:</b> {amount}₽\n"
-            f"📅 <b>Дата последнего платежа:</b> {payment_date}\n\n"
-            "❕ Убедитесь, что подписка активна, чтобы продолжить пользоваться услугами без перерывов.\n"
-            '❕ Если у вас есть вопросы или нужно продлить подписку, нажмите на кнопку "Помощь" или напишите нам.'
-        )
-
-        if end_date:
-            end_date_obj = datetime.strptime(end_date, "%d.%m.%Y")
-            print(end_date_obj, datetime.now(), (end_date_obj - datetime.now()).days)
-            if (end_date_obj - datetime.now()).days <= 7:
-                message += "\n\n⚠️ <b>Внимание! Ваша подписка истекает через несколько дней. Не забудьте продлить её.</b>"
-
-        return message, device_name
+        return instructions.get(platform, "Платформа не найдена")
 
     @staticmethod
     def get_approve_payment_link(amount: int, confirmation_url: str) -> str:
@@ -92,68 +171,6 @@ class TextManager:
             f'2. По <a href="{payment_link}">ссылке.</a>\n\n'
             f'⚠️ <b>Важно!</b> После оплаты нажмите кнопку <b>"Я оплатил"</b>, чтобы мы могли обработать ваш заказ.\n'
             f"Специалист свяжется с вами для дальнейшего подключения."
-        )
-
-    @staticmethod
-    def get_help_text():
-        return "<b>ВАЖНО!! Если тебе не написал наш админ, проверь указан никнейм или нет. Если нет, укажи и повторно сделай заявку!</b>\n\n 👨‍💻 Админ - @my7vpnadmin\n\nВыберите нужный пункт, чтобы получить подробную информацию:"
-
-    @staticmethod
-    def get_android_settings():
-        return (
-            "📱 <b>Подключение VPN на Android</b>\n\n"
-            "1️⃣ <b>Скачайте приложение:</b>\n\n"
-            '<a href="https://play.google.com/store/apps/details?id=com.v2raytun.android&pcampaignid=web_share">v2RayTun → Скачать в Play Market</a>\n\n'
-            "2️⃣ <b>Установите и откройте приложение</b>\n\n"
-            "<a>Разрешите необходимые доступы (если запрашивает).</a>\n\n"
-            "3️⃣ <b>Получите конфигурацию VPN</b>\n\n"
-            "<a>Админ пришлёт вам нужные настройки после проверки оплаты</a>\n\n"
-            "4️⃣ <b>Импортируйте конфигурацию в приложение</b>\n\n"
-            "<a>В приложении найдите кнопку ➕.</a>\n"
-            "<a>Выберите QR или ссылку, которые вы получили от нашего админа</a>\n\n"
-            "5️⃣ Добавьте настройки в приложение как указано в <a href='https://telegra.ph/Vazhnye-nastrojki-v2RayTun-04-17'>инструкции</a>\n\n"
-            "5️⃣ <b>Подключитесь к VPN</b>\n\n"
-            '<a>Нажмите кнопку "Подключиться" в приложении.</a>\n\n'
-            "<b>Готово! Теперь ваш трафик защищён.</b>"
-        )
-
-    @staticmethod
-    def get_computer_settings():
-        return (
-            "💻 <b>Подключение VPN на Компьютер</b>\n\n"
-            "1️⃣ <b>Скачайте приложение в зависимости от вашей ОС:</b>\n\n"
-            '<a href="https://apps.apple.com/ru/app/v2raytun/id6476628951">1. v2RayTun -> для Mac</a>\n'
-            '<a href="https://apps.microsoft.com/detail/9PDFNL3QV2S5?hl=neutral&gl=RU&ocid=pdpshare">2. Hiddify -> для Windows</a>\n\n'
-            "2️⃣ <b>Установите и откройте приложение</b>\n\n"
-            "<a>Разрешите необходимые доступы(если запрашивает).</a>\n\n"
-            "3️⃣ <b>Получите конфигурацию VPN</b>\n\n"
-            "<a>Админ пришлёт вам нужные настройки после проверки оплаты</a>\n\n"
-            "4️⃣ <b>Импортируйте конфигурацию в приложение</b>\n\n"
-            "<a>В приложении найдите кнопку ➕.</a>\n"
-            "<a>Выберите QR или ссылку, которые вы получили от нашего админа</a>\n\n"
-            "5️⃣ Добавьте настройки в приложение как указано в <a href='https://telegra.ph/Vazhnye-nastrojki-v2RayTun-04-17'>инструкции для MAC</a>\n\n"
-            "6️⃣ <b>Подключитесь к VPN</b>\n\n"
-            '<a>Нажмите кнопку "Подключиться" в приложении.</a>\n\n'
-            "<b>Готово! Теперь ваш трафик защищён.</b>"
-        )
-
-    @staticmethod
-    def get_settings_iphone():
-        return (
-            "📱 <b>Подключение VPN на iPhone(iPad)</b>\n\n"
-            "1️⃣ <b>Скачайте приложение:</b>\n\n"
-            '<a href="https://apps.apple.com/ru/app/v2raytun/id6476628951">v2RayTun → Скачать в App Store</a>\n\n'
-            "2️⃣ <b>Установите и откройте приложение</b>\n\n"
-            "<a>Разрешите необходимые доступы (если запрашивает).</a>\n\n"
-            "3️⃣ <b>Получите конфигурацию VPN</b>\n\n"
-            "<a>Админ пришлёт вам нужные настройки после проверки оплаты</a>\n\n"
-            "4️⃣ <b>Импортируйте конфигурацию в приложение</b>\n\n"
-            "<a>В приложении найдите кнопку ➕.</a>\n"
-            "<a>Выберите QR или ссылку, которые вы получили от нашего админа</a>\n\n"
-            "5️⃣ Добавьте настройки в приложение как указано в <a href='https://telegra.ph/Vazhnye-nastrojki-v2RayTun-04-17'>инструкции</a>\n\n"
-            "6️⃣ <b>Подключитесь к VPN</b>\n\n"
-            '<a>Нажмите кнопку "Подключиться" в приложении.</a>\n\n'
-            "<b>Готово! Теперь ваш трафик защищён.</b>"
         )
 
     @staticmethod
