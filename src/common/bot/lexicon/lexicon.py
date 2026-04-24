@@ -2,32 +2,27 @@ from src.common.bot.keyboards.user_actions import CallbackAction, DeviceType
 
 LEXICON_COMMANDS_RU: dict[str, str] = {
     "start": "🏠 Главное меню",
-    "devices": "📱 Мои устройства",
-    "invite": "👩‍💻 Пригласить друга!",
-    "help": "❓ Помощь",
+    "invite": "👫 Пригласить друга",
+    "help": "📖 Инструкция",
 }
 
 LEXICON_INLINE_RU: dict[str, str] = {
-    CallbackAction.VPN_ERROR: "☠️ Не работает VPN",
-    CallbackAction.LIST_DEVICES: "Мои устройства 📱 💻",
-    CallbackAction.SUPPORT_HELP: "Помощь 🆘 ",
-    CallbackAction.SETTINGS_ANDROID_PHONE: "Настройки Android 📱",
-    CallbackAction.SETTINGS_IOS: "Настройки iPhone 🍏",
-    CallbackAction.SETTINGS_DESKTOP: "Настройки ПК 🖥(Windows, MacOS)",
-    CallbackAction.SETTINGS_TV: "Настройки TV 📺 (Android)",
+    CallbackAction.MY_SUBSCRIPTION: "📋 Подписка",
+    CallbackAction.RENEW_SUB: "🔄 Продлить",
+    CallbackAction.INSTRUCTION: "📖 Инструкция",
+    CallbackAction.FRIENDS: "👫 Друзья",
+    CallbackAction.NEW_SUB: "🚀 Подключить VPN",
     CallbackAction.START: "🏠 Главное меню",
-    CallbackAction.YES: "✅ Да, подтверждаю",
-    CallbackAction.NO: "❌ Нет, передумал",
+    CallbackAction.YES: "✅ Оплатить",
+    CallbackAction.NO: "❌ Отмена",
     CallbackAction.CANCEL: "❌ Отмена",
     CallbackAction.PAYMENT_SUCCESS: "✅ Я оплатил",
-    CallbackAction.NEW_SUB: "✅ Я оплатил",
-    CallbackAction.RENEW_SUB: "Продлить подписку 💳",
 }
 
 LEXICON_INLINE_DEVICE_RU: dict[str, str] = {
     DeviceType.ANDROID_PHONE: "📱 Android",
-    DeviceType.IOS: "📱 iOS (iPhone, iPad)",
-    DeviceType.TV_ANDROID: "📺 TV(Android)",
+    DeviceType.IOS: "🍏 iPhone / iPad",
+    DeviceType.TV_ANDROID: "📺 Android TV",
     DeviceType.COMPUTER_WINDOWS: "💻 Windows",
     DeviceType.COMPUTER_MACOS: "💻 MacOS",
 }

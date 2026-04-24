@@ -2,35 +2,21 @@ from enum import IntEnum, StrEnum
 
 
 class CallbackAction(StrEnum):
-    # Помощь и ошибки
-    VPN_ERROR = "vpn_error"
-    SUPPORT_HELP = "support_help"
-
-    # Устройства
-    LIST_DEVICES = "list_devices"
-
-    # Настройки
-    SETTINGS_ANDROID_PHONE = "settings:android_phone"
-    SETTINGS_IOS = "settings:ios"
-    SETTINGS_DESKTOP = "settings:desktop"
-    SETTINGS_TV = "settings:tv"
-
     # Навигация
     START = "start"
-    INVITE = "invite"
+    MY_SUBSCRIPTION = "my_subscription"
+    INSTRUCTION = "instruction"
+    FRIENDS = "friends"
 
-    # Подтверждение действия
+    # Подтверждение
     YES = "yes"
     NO = "no"
 
     # Оплата
-    PAYMENT_SUCCESS = "paymen_success"
+    PAYMENT_SUCCESS = "payment_success"
     CANCEL = "cancel"
     RENEW_SUB = "renew"
     NEW_SUB = "new"
-
-    # Ошибки с устройствами
-    DEVICE_ERROR = "report:device_error"
 
 
 class DeviceType(StrEnum):

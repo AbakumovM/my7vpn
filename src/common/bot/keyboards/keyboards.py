@@ -3,22 +3,18 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from src.common.bot.cbdata import (
     AdminConfirmCallback,
-    DeviceConfCallback,
-    DeviceDeleteCallback,
-    DeviceErrorCallback,
     SettingsCallback,
     VpnCallback,
 )
 from src.common.bot.keyboards.user_actions import (
-    ActualTariff,
     CallbackAction,
     ChoiceType,
-    DeviceType,
     PaymentStatus,
     TARIFF_MATRIX,
     VpnAction,
 )
-from src.common.bot.lexicon.lexicon import LEXICON_INLINE_DEVICE_RU, LEXICON_INLINE_RU
+from src.common.bot.lexicon.lexicon import LEXICON_INLINE_RU
+from src.infrastructure.config import app_config
 
 
 # Функция для формирования инлайн-клавиатуры на лету
@@ -55,44 +51,76 @@ def get_keyboard_payment_link() -> InlineKeyboardMarkup:
     )
 
 
-def get_keyboard_type_device(action: str, referral_id: int | None = None) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    for dev in DeviceType:
-        keyboard.inline_keyboard.append(
+def get_keyboard_main_menu(has_subscription: bool) -> InlineKeyboardMarkup:
+    """Главное меню — сетка 2×2 + 2×1. URL-кнопки для кабинета и поддержки."""
+    if has_subscription:
+        rows = [
+            [
+                InlineKeyboardButton(text="📋 Подписка", callback_data=CallbackAction.MY_SUBSCRIPTION),
+                InlineKeyboardButton(text="🔄 Продлить", callback_data=VpnCallback(action=VpnAction.RENEW).pack()),
+            ],
+        ]
+    else:
+        rows = [
             [
                 InlineKeyboardButton(
-                    text=LEXICON_INLINE_DEVICE_RU[dev],
-                    callback_data=VpnCallback(
-                        action=action,
-                        device=dev,
-                        device_limit=1 if action == VpnAction.REFERRAL else None,
-                        duration=1 if action == VpnAction.REFERRAL else 0,
-                        referral_id=referral_id,
-                        payment=0 if action == VpnAction.REFERRAL else None,
-                        balance=0 if action == VpnAction.REFERRAL else None,
-                        choice=(ChoiceType.STOP if action == VpnAction.REFERRAL else None),
-                        payment_status=(
-                            PaymentStatus.SUCCESS if action == VpnAction.REFERRAL else None
-                        ),
-                    ).pack(),
-                )
-            ]
-        )
-    return keyboard
+                    text="🚀 Подключить VPN",
+                    callback_data=VpnCallback(action=VpnAction.NEW).pack(),
+                ),
+            ],
+        ]
+
+    rows.append([
+        InlineKeyboardButton(text="📖 Инструкция", callback_data=CallbackAction.INSTRUCTION),
+        InlineKeyboardButton(text="👫 Друзья", callback_data=CallbackAction.FRIENDS),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🌐 Кабинет", url=app_config.auth.site_url),
+        InlineKeyboardButton(text="💬 Поддержка", url=f"https://t.me/{app_config.bot.admin_username}"),
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_keyboard_subscription(is_expiring: bool = False) -> InlineKeyboardMarkup:
+    """Кнопки на экране 'Моя подписка'."""
+    if is_expiring:
+        rows = [
+            [InlineKeyboardButton(
+                text="🔄 Продлить подписку",
+                callback_data=VpnCallback(action=VpnAction.RENEW).pack(),
+            )],
+            [
+                InlineKeyboardButton(text="📖 Инструкция", callback_data=CallbackAction.INSTRUCTION),
+                InlineKeyboardButton(text="🏠 Меню", callback_data=CallbackAction.START),
+            ],
+        ]
+    else:
+        rows = [
+            [
+                InlineKeyboardButton(
+                    text="🔄 Продлить",
+                    callback_data=VpnCallback(action=VpnAction.RENEW).pack(),
+                ),
+                InlineKeyboardButton(text="📖 Инструкция", callback_data=CallbackAction.INSTRUCTION),
+            ],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CallbackAction.START)],
+        ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_keyboard_device_count(
-    action: str, device: str, referral_id: int | None = None
+    action: str, referral_id: int | None = None
 ) -> InlineKeyboardMarkup:
-    """Шаг 1.5: выбор количества устройств."""
+    """Шаг 1: выбор количества устройств. 3 устройства выделены как хит."""
+    labels = {1: "📱 1 устройство", 2: "📱📱 2 устройства", 3: "⭐ 📱📱📱 3 устройства — хит"}
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    for count, label in [(1, "1 устройство"), (2, "2 устройства"), (3, "3 устройства")]:
+    for count in (1, 2, 3):
         keyboard.inline_keyboard.append([
             InlineKeyboardButton(
-                text=label,
+                text=labels[count],
                 callback_data=VpnCallback(
                     action=action,
-                    device=device,
                     device_limit=count,
                     duration=0,
                     referral_id=referral_id,
@@ -102,43 +130,27 @@ def get_keyboard_device_count(
     return keyboard
 
 
-def get_keyboard_type_comp(types: str = "device") -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_DEVICE_RU[DeviceType.COMPUTER_WINDOWS],
-                callback_data=f"{types}:{DeviceType.COMPUTER_WINDOWS}",
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_DEVICE_RU[DeviceType.COMPUTER_MACOS],
-                callback_data=f"{types}:{DeviceType.COMPUTER_MACOS}",
-            )
-        ]
-    )
-    return keyboard
-
-
 def get_keyboard_tariff(
     action: str,
-    device: str,
     device_limit: int = 1,
     referral_id: int | None = None,
 ) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    """Шаг 2: выбор тарифа. 3 мес = хит, 6 мес = выгодно."""
     prices = TARIFF_MATRIX[device_limit]
+    month_price = prices[1]
+
+    badges = {3: " ⭐ хит", 6: " 💰 выгодно"}
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for months, label in [(1, "1 мес"), (3, "3 мес"), (6, "6 мес"), (12, "12 мес")]:
         price = prices[months]
+        discount = round((1 - price / (month_price * months)) * 100)
+        discount_text = f" (-{discount}%)" if discount > 0 else ""
+        badge = badges.get(months, "")
         keyboard.inline_keyboard.append([
             InlineKeyboardButton(
-                text=f"{label} — {price} руб.",
+                text=f"{label} — {price}₽{discount_text}{badge}",
                 callback_data=VpnCallback(
                     action=action,
-                    device=device,
                     device_limit=device_limit,
                     duration=months,
                     referral_id=referral_id,
@@ -149,229 +161,80 @@ def get_keyboard_tariff(
     return keyboard
 
 
-def get_keyboard_tariff_for_update() -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=f"1 мес {ActualTariff.MONTH_12} руб.",
-                callback_data=f"uptar:{ActualTariff.MONTH_1}:1",
-            ),
-            InlineKeyboardButton(
-                text=f"3 мес {ActualTariff.MONTH_3} руб.",
-                callback_data=f"uptar:{ActualTariff.MONTH_3}:3",
-            ),
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=f"6 мес {ActualTariff.MONTH_6} руб.",
-                callback_data=f"uptar:{ActualTariff.MONTH_6}:6",
-            ),
-            InlineKeyboardButton(
-                text=f"12 мес {ActualTariff.MONTH_12} руб.",
-                callback_data=f"uptar:{ActualTariff.MONTH_12}:12",
-            ),
-        ]
-    )
-    return keyboard
-
-
-def get_keyboard_yes_or_no() -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.YES],
-                callback_data=f"finally:{CallbackAction.YES}",
-            ),
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.NO],
-                callback_data=f"finally:{CallbackAction.NO}",
-            ),
-        ]
-    )
-    return keyboard
-
-
-def get_keyboard_yes_or_no_for_update(
+def get_keyboard_confirm_payment(
     action: str,
-    device: str,
+    device_limit: int,
     duration: int,
-    balance: int,
     payment: int,
-    referral_id: int | None,
-    device_limit: int = 1,
+    balance: int,
+    referral_id: int | None = None,
 ) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
+    """Шаг 3: подтверждение оплаты."""
+    return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.YES],
+                text="✅ Оплатить",
                 callback_data=VpnCallback(
                     action=action,
-                    device=device,
                     device_limit=device_limit,
                     duration=duration,
                     referral_id=referral_id,
                     payment=payment,
                     balance=balance,
-                    choice="yes",
+                    choice=ChoiceType.YES,
                 ).pack(),
             ),
             InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.NO],
+                text="❌ Отмена",
                 callback_data=VpnCallback(
                     action=action,
-                    device=device,
                     device_limit=device_limit,
                     duration=duration,
                     referral_id=referral_id,
                     payment=payment,
                     balance=balance,
-                    choice="no",
+                    choice=ChoiceType.NO,
                 ).pack(),
             ),
         ]
-    )
-    return keyboard
+    ])
 
 
-def get_keyboard_device_test():
-    pass
+def get_keyboard_instruction_platforms() -> InlineKeyboardMarkup:
+    """Выбор платформы для инструкции."""
+    platforms = [
+        ("📱 Android", "android_phone"),
+        ("🍏 iPhone / iPad", "ios"),
+        ("💻 Windows", "windows"),
+        ("💻 MacOS", "macos"),
+        ("📺 Android TV", "tv"),
+    ]
+    rows = [
+        [InlineKeyboardButton(text=label, callback_data=SettingsCallback(platform=code).pack())]
+        for label, code in platforms
+    ]
+    rows.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data=CallbackAction.START)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def get_keyboard_devices(devices: list, conf=None) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    for device in devices:
-        keyboard.inline_keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=device.device_name,
-                    callback_data=DeviceConfCallback(device_id=device.id).pack(),
-                )
-            ]
-        )
-    menu = get_basic_menu()
-    for i in menu:
-        keyboard.inline_keyboard.append(i)
-    return keyboard
+def get_keyboard_instruction_detail() -> InlineKeyboardMarkup:
+    """Кнопки после инструкции — ключ, назад, меню."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Мой ключ подписки", callback_data=CallbackAction.MY_SUBSCRIPTION)],
+        [InlineKeyboardButton(text="◀️ Выбор платформы", callback_data=CallbackAction.INSTRUCTION)],
+        [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CallbackAction.START)],
+    ])
 
 
-def get_keyboard_devices_for_error(devices: list) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    for device in devices:
-        keyboard.inline_keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=device.device_name,
-                    callback_data=DeviceErrorCallback(device_id=device.id).pack(),
-                )
-            ]
-        )
-    return keyboard
-
-
-def get_keyboard_devices_for_del(devices: list[str]) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    for device in devices:
-        keyboard.inline_keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=f"{device.device_name}",
-                    callback_data=DeviceDeleteCallback(device_id=device.id).pack(),
-                )
-            ]
-        )
-    return keyboard
-
-
-def get_basic_menu() -> list[list[InlineKeyboardButton]]:
-    keyboard = []
-    keyboard.append(
-        [
-            InlineKeyboardButton(
-                text="➕ Добавить устр.",
-                callback_data=VpnCallback(action=CallbackAction.NEW_SUB, device=None).pack(),
-            ),
-            InlineKeyboardButton(text="➖ Удалить устр.", callback_data="del"),
-        ]
-    )
-    keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.START],
-                callback_data=CallbackAction.START,
-            ),
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.SUPPORT_HELP],
-                callback_data=CallbackAction.SUPPORT_HELP,
-            ),
-        ]
-    )
-    return keyboard
-
-
-def get_keyboard_start() -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.VPN_ERROR],
-                callback_data=CallbackAction.VPN_ERROR,
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.LIST_DEVICES],
-                callback_data=CallbackAction.LIST_DEVICES,
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.SUPPORT_HELP],
-                callback_data=CallbackAction.SUPPORT_HELP,
-            )
-        ]
-    )
-    return keyboard
-
-
-def get_keyboard_for_details_device(device_name: str) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.RENEW_SUB],
-                callback_data=VpnCallback(
-                    action=CallbackAction.RENEW_SUB, device=device_name
-                ).pack(),
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.LIST_DEVICES],
-                callback_data=CallbackAction.LIST_DEVICES,
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.SUPPORT_HELP],
-                callback_data=CallbackAction.SUPPORT_HELP,
-            )
-        ]
-    )
-
-    return keyboard
+def get_keyboard_friends(referral_code: str) -> InlineKeyboardMarkup:
+    """Кнопки реферального экрана."""
+    bot_name = app_config.bot.bot_name
+    share_text = f"Попробуй VPN — 7 дней бесплатно! https://t.me/{bot_name}?start={referral_code}"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📤 Поделиться в Telegram", switch_inline_query=share_text)],
+        [InlineKeyboardButton(text="📋 Скопировать ссылку", callback_data=f"copy_ref:{referral_code}")],
+        [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CallbackAction.START)],
+    ])
 
 
 def get_keyboard_approve_payment_or_cancel(
@@ -424,14 +287,42 @@ def get_keyboard_approve_payment_or_cancel(
     return keyboard
 
 
-def get_keyboard_approve_payment_or_cancel_for_update():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text="Я оплатил ✅", callback_data="fup_success")]
-    )
-    keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text="Отмена ❌", callback_data="mydevices")]
-    )
+def get_keyboard_admin_confirm(pending_id: int) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Подтвердить",
+                callback_data=AdminConfirmCallback(
+                    pending_id=pending_id, action="confirm"
+                ).pack(),
+            ),
+            InlineKeyboardButton(
+                text="❌ Отклонить",
+                callback_data=AdminConfirmCallback(
+                    pending_id=pending_id, action="reject"
+                ).pack(),
+            ),
+        ]
+    ])
+    return keyboard
+
+
+def get_keyboard_vpn_received() -> InlineKeyboardMarkup:
+    """Клавиатура после получения VPN-ключа: инструкция + главное меню."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="📖 Инструкция по подключению",
+                callback_data=CallbackAction.INSTRUCTION,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=LEXICON_INLINE_RU[CallbackAction.START],
+                callback_data=CallbackAction.START,
+            )
+        ],
+    ])
     return keyboard
 
 
@@ -458,97 +349,4 @@ def return_start():
             )
         ]
     )
-    return keyboard
-
-
-def get_keyboard_help():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.VPN_ERROR],
-                callback_data=CallbackAction.VPN_ERROR,
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.SETTINGS_ANDROID_PHONE],
-                callback_data=SettingsCallback(platform="android_phone").pack(),
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.SETTINGS_IOS],
-                callback_data=SettingsCallback(platform="ios").pack(),
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.SETTINGS_DESKTOP],
-                callback_data=SettingsCallback(platform="desktop").pack(),
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.SETTINGS_TV],
-                url="https://telegra.ph/Instrukciya-po-nastrojke-VPN-Key-na-Android-TV-08-27",
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.START],
-                callback_data=CallbackAction.START,
-            )
-        ]
-    )
-
-    return keyboard
-
-
-def get_keyboard_admin_confirm(pending_id: int) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="✅ Подтвердить",
-                callback_data=AdminConfirmCallback(
-                    pending_id=pending_id, action="confirm"
-                ).pack(),
-            ),
-            InlineKeyboardButton(
-                text="❌ Отклонить",
-                callback_data=AdminConfirmCallback(
-                    pending_id=pending_id, action="reject"
-                ).pack(),
-            ),
-        ]
-    ])
-    return keyboard
-
-
-def get_keyboard_vpn_received() -> InlineKeyboardMarkup:
-    """Клавиатура после получения VPN-ключа: инструкция + главное меню."""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="📋 Инструкция по подключению",
-                callback_data=CallbackAction.SUPPORT_HELP,
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.START],
-                callback_data=CallbackAction.START,
-            )
-        ],
-    ])
     return keyboard
