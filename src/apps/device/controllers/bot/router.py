@@ -6,13 +6,11 @@ from aiogram.fsm.context import FSMContext
 from dishka.integrations.aiogram import FromDishka
 
 from src.apps.device.application.interactor import DeviceInteractor
-from src.apps.device.application.interfaces.view import DeviceView
 from src.apps.device.domain.commands import (
     ConfirmPayment,
     CreateDevice,
     CreateDeviceFree,
     CreatePendingPayment,
-    DeleteDevice,
     RejectPayment,
     RenewSubscription,
 )
@@ -24,23 +22,18 @@ from src.apps.user.domain.commands import (
     MarkFreeMonthUsed,
     SetUserEmail,
 )
-from src.common.bot.cbdata import AdminConfirmCallback, DeviceConfCallback, DeviceDeleteCallback, VpnCallback
+from src.common.bot.cbdata import AdminConfirmCallback, VpnCallback
 from src.common.bot.files import get_photo_for_pay
 from src.common.bot.keyboards.keyboards import (
-    create_inline_kb,
     get_keyboard_admin_confirm,
     get_keyboard_approve_payment_or_cancel,
+    get_keyboard_confirm_payment,
     get_keyboard_device_count,
-    get_keyboard_devices,
-    get_keyboard_devices_for_del,
-    get_keyboard_for_details_device,
+    get_keyboard_main_menu,
     get_keyboard_payment_link,
     get_keyboard_skip_email,
-    get_keyboard_start,
     get_keyboard_tariff,
-    get_keyboard_type_device,
     get_keyboard_vpn_received,
-    get_keyboard_yes_or_no_for_update,
     return_start,
 )
 from src.infrastructure.yookassa.client import YooKassaClient
@@ -59,119 +52,6 @@ router = Router()
 
 ADMIN_ID = app_config.bot.admin_id
 LINK = app_config.payment.payment_url
-
-
-from aiogram.filters import Command as _Command  # noqa: E402
-
-
-@router.message(_Command("devices"))
-async def handle_devices_cmd(
-    msg: types.Message,
-    device_view: FromDishka[DeviceView],
-) -> None:
-    devices = await device_view.list_for_user(msg.from_user.id)
-    if devices:
-        await msg.answer(
-            text=bot_repl.get_message_devices(len(devices)),
-            reply_markup=get_keyboard_devices(devices, "conf"),
-        )
-    else:
-        await msg.answer("У вас нет активных устройств", reply_markup=get_keyboard_start())
-
-
-@router.callback_query(F.data == CallbackAction.LIST_DEVICES)
-async def handle_list_devices(
-    call: types.CallbackQuery,
-    device_view: FromDishka[DeviceView],
-) -> None:
-    try:
-        devices = await device_view.list_for_user(call.from_user.id)
-        if devices:
-            await call.message.answer(
-                text=bot_repl.get_message_devices(len(devices)),
-                reply_markup=get_keyboard_devices(devices, "conf"),
-            )
-        else:
-            await call.message.answer("У вас нет активных устройств")
-    except Exception:
-        log.exception("handle_list_devices_error")
-        await call.message.answer(
-            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
-        )
-
-
-@router.callback_query(F.data.startswith("del"))
-async def handle_delete_prompt(
-    call: types.CallbackQuery,
-    device_view: FromDishka[DeviceView],
-) -> None:
-    try:
-        devices = await device_view.list_for_user(call.from_user.id)
-        if not devices:
-            await call.message.answer("У вас нет активных устройств")
-            return
-        await call.message.answer(
-            "Какое устройство вы хотите отключить?",
-            reply_markup=get_keyboard_devices_for_del(devices),
-        )
-    except Exception:
-        log.exception("handle_delete_prompt_error")
-        await call.message.answer(
-            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
-        )
-
-
-@router.callback_query(DeviceDeleteCallback.filter())
-async def handle_delete_confirm(
-    call: types.CallbackQuery,
-    callback_data: DeviceDeleteCallback,
-    bot: Bot,
-    interactor: FromDishka[DeviceInteractor],
-) -> None:
-    device_id = callback_data.device_id
-    try:
-        device_name = await interactor.delete_device(DeleteDevice(device_id=device_id))
-        log.info("device_deleted", device_id=device_id, device_name=device_name)
-        await call.message.edit_text("Устройство удалено")
-        await bot.send_message(
-            chat_id=ADMIN_ID,
-            text=(
-                f"❌ Пользователь удалил у себя VPN!\n"
-                f"👤 Имя: {call.from_user.username}\n"
-                f"🆔 ID: {call.from_user.id}\n"
-                f"📋 Девайс: {device_name}"
-            ),
-        )
-    except Exception:
-        log.exception("handle_delete_confirm_error", device_id=device_id)
-        await call.message.edit_text(
-            "Что то пошло не так. Попробуй позже или напиши в поддержку @my7vpnadmin."
-        )
-
-
-@router.callback_query(DeviceConfCallback.filter())
-async def handle_device_detail(
-    call: types.CallbackQuery,
-    callback_data: DeviceConfCallback,
-    device_view: FromDishka[DeviceView],
-) -> None:
-    device_id = callback_data.device_id
-    result = await device_view.get_full_info(device_id)
-    if result is None:
-        await call.message.answer("Устройство не найдено")
-        return
-    text, device_name = bot_repl.generate_device_info_message(
-        {
-            "device_name": result.device_name,
-            "end_date": result.end_date,
-            "amount": result.amount,
-            "payment_date": result.payment_date,
-        }
-    )
-    await call.message.answer(
-        text=text,
-        reply_markup=get_keyboard_for_details_device(device_name=result.device_name),
-    )
 
 
 EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
@@ -221,7 +101,7 @@ async def _show_qr_from_state(
         caption=bot_repl.get_approve_payment(amount=data["payment"], payment_link=LINK),
         reply_markup=get_keyboard_approve_payment_or_cancel(
             action=data["action"],
-            device=data["device"],
+            device="vpn",
             device_limit=data.get("device_limit", 1),
             duration=data["duration"],
             referral_id=data.get("referral_id"),
@@ -292,12 +172,12 @@ async def handle_email_input(
         await _show_payment_link(
             msg, interactor,
             action=data["action"],
-            device=data["device"],
+            device="vpn",
             device_limit=data.get("device_limit", 1),
             duration=data["duration"],
             amount=data["payment"],
             balance=data["balance"],
-            device_name=data.get("device_name"),
+            device_name=None,
             user_telegram_id=msg.from_user.id,
         )
     else:
@@ -319,12 +199,12 @@ async def handle_skip_email(
         await _show_payment_link(
             call, interactor,
             action=data["action"],
-            device=data["device"],
+            device="vpn",
             device_limit=data.get("device_limit", 1),
             duration=data["duration"],
             amount=data["payment"],
             balance=data["balance"],
-            device_name=data.get("device_name"),
+            device_name=None,
             user_telegram_id=call.from_user.id,
         )
     else:
@@ -343,7 +223,6 @@ async def handle_vpn_flow(
     user_view: FromDishka[UserView],
 ) -> None:
     action = callback_data.action
-    device = callback_data.device
     device_limit = callback_data.device_limit
     duration = callback_data.duration
     referral_id = callback_data.referral_id
@@ -352,20 +231,11 @@ async def handle_vpn_flow(
     choice = callback_data.choice
     payment_status = callback_data.payment_status
 
-    # Шаг 1: выбор типа устройства
-    if device is None:
-        await call.message.edit_text(
-            bot_repl.get_message_for_added_device(),
-            reply_markup=get_keyboard_type_device(action=action, referral_id=referral_id),
-        )
-        await call.answer()
-        return
-
-    # Шаг 1.5: выбор количества устройств
+    # Шаг 1: выбор количества устройств
     if device_limit is None:
         await call.message.edit_text(
-            "Выберите количество устройств:",
-            reply_markup=get_keyboard_device_count(action=action, device=device, referral_id=referral_id),
+            bot_repl.get_choose_device_count(),
+            reply_markup=get_keyboard_device_count(action=action, referral_id=referral_id),
         )
         await call.answer()
         return
@@ -373,29 +243,35 @@ async def handle_vpn_flow(
     # Шаг 2: выбор тарифа
     if duration == 0:
         await call.message.edit_text(
-            "Выберете тариф, который хотите подключить:",
+            bot_repl.get_choose_tariff(device_limit),
             reply_markup=get_keyboard_tariff(
-                action=action, device=device, device_limit=device_limit, referral_id=referral_id
+                action=action, device_limit=device_limit, referral_id=referral_id
             ),
         )
         await call.answer()
         return
 
-    # Шаг 3: показ суммы к оплате
+    # Шаг 3: подтверждение оплаты
     if balance is None:
         user_balance = await user_view.get_balance(call.from_user.id)
         finally_payment = max(payment - user_balance, 0)
-        balance_to_deduct = min(user_balance, payment)  # сколько списать с бонусного баланса
+        balance_to_deduct = min(user_balance, payment)
+        bonus = payment - finally_payment
         await call.message.edit_text(
-            bot_repl.get_full_info_payment(device, duration, finally_payment, payment),
-            reply_markup=get_keyboard_yes_or_no_for_update(
+            bot_repl.get_confirm_payment(
+                device_limit=device_limit,
+                duration=duration,
+                price=payment,
+                bonus=bonus,
+                total=finally_payment,
+            ),
+            reply_markup=get_keyboard_confirm_payment(
                 action=action,
-                device=device,
+                device_limit=device_limit,
                 duration=duration,
                 balance=balance_to_deduct,
                 payment=finally_payment,
                 referral_id=referral_id,
-                device_limit=device_limit or 1,
             ),
         )
         await call.answer()
@@ -403,34 +279,29 @@ async def handle_vpn_flow(
 
     # Шаг 4: отмена
     if choice == ChoiceType.NO or payment_status == PaymentStatus.FAILED:
-        keyboard = create_inline_kb(1, CallbackAction.START)
         await call.message.delete()
         await call.message.answer(
-            text=bot_repl.send_messages_cancel_choice(), reply_markup=keyboard
+            text=bot_repl.send_messages_cancel_choice(),
+            reply_markup=return_start(),
         )
         await call.answer()
         return
 
-    # Шаг 5: подтверждение → проверка email → показ QR-оплаты
+    # Шаг 5: подтверждение → проверка email → показ оплаты
     if choice == ChoiceType.YES:
         await call.message.delete()
 
         # Проверяем наличие email у пользователя
         user_email = await user_view.get_email(call.from_user.id)
         if user_email is None:
-            # Сохраняем данные flow в FSM state
-            await state.set_data(
-                {
-                    "action": action,
-                    "device": device,
-                    "device_limit": device_limit,
-                    "duration": duration,
-                    "referral_id": referral_id,
-                    "payment": payment,
-                    "balance": balance,
-                    "device_name": callback_data.device_name,
-                }
-            )
+            await state.set_data({
+                "action": action,
+                "device_limit": device_limit,
+                "duration": duration,
+                "referral_id": referral_id,
+                "payment": payment,
+                "balance": balance,
+            })
             await state.set_state(EmailInput.waiting_for_email)
             await call.message.answer(
                 "📧 Укажите вашу электронную почту — она понадобится "
@@ -444,26 +315,19 @@ async def handle_vpn_flow(
             await _show_payment_link(
                 call, interactor,
                 action=action,
-                device=device,
+                device="vpn",
                 device_limit=device_limit or 1,
                 duration=duration,
                 amount=payment,
                 balance=balance,
-                device_name=callback_data.device_name,
+                device_name=None,
                 user_telegram_id=call.from_user.id,
             )
             await call.answer()
             return
 
         await _show_qr_payment(
-            call,
-            action,
-            device,
-            device_limit or 1,
-            duration,
-            referral_id,
-            payment,
-            balance,
+            call, action, "vpn", device_limit or 1, duration, referral_id, payment, balance,
         )
         await call.answer()
         return
@@ -480,7 +344,7 @@ async def handle_vpn_flow(
             CreatePendingPayment(
                 user_telegram_id=call.from_user.id,
                 action="new",
-                device_type=device,
+                device_type="vpn",
                 duration=duration,
                 amount=payment,
                 balance_to_deduct=balance,
@@ -494,7 +358,7 @@ async def handle_vpn_flow(
             text=(
                 f"💳 Новый платёж!\n"
                 f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
-                f"📱 Устройство: {device}\n"
+                f"📱 Устройств: {device_limit}\n"
                 f"📅 Срок: {duration} мес → {payment}₽"
             ),
             reply_markup=get_keyboard_admin_confirm(pending.id),
@@ -503,7 +367,7 @@ async def handle_vpn_flow(
             "pending_payment_created",
             pending_id=pending.id,
             user_id=call.from_user.id,
-            device_type=device,
+            device_type="vpn",
             duration=duration,
             amount=payment,
         )
@@ -517,17 +381,15 @@ async def handle_vpn_flow(
             await call.answer()
             return
         await call.answer()
-        device_name_for_renew = callback_data.device_name or device
         pending = await interactor.create_pending_payment(
             CreatePendingPayment(
                 user_telegram_id=call.from_user.id,
                 action="renew",
-                device_type=device,
+                device_type="vpn",
                 duration=duration,
                 amount=payment,
                 balance_to_deduct=balance,
                 device_limit=device_limit or 1,
-                device_name=device_name_for_renew,
             )
         )
         await call.message.delete()
@@ -537,7 +399,7 @@ async def handle_vpn_flow(
             text=(
                 f"🔄 Продление подписки!\n"
                 f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
-                f"📱 Устройство: {device_name_for_renew}\n"
+                f"📱 Устройств: {device_limit}\n"
                 f"📅 Срок: {duration} мес → {payment}₽"
             ),
             reply_markup=get_keyboard_admin_confirm(pending.id),
@@ -546,7 +408,6 @@ async def handle_vpn_flow(
             "pending_renewal_created",
             pending_id=pending.id,
             user_id=call.from_user.id,
-            device_name=device_name_for_renew,
             duration=duration,
             amount=payment,
         )
@@ -563,28 +424,28 @@ async def handle_vpn_flow(
         result_free = await interactor.create_device_free(
             CreateDeviceFree(
                 telegram_id=call.from_user.id,
-                device_type=device,
+                device_type="vpn",
                 period_days=app_config.payment.free_month,
             )
         )
         log.info(
             "device_created_free",
             device_name=result_free.device_name,
-            device_type=device,
+            device_type="vpn",
             referral_id=referral_id,
         )
         await user_interactor.mark_free_month_used(MarkFreeMonthUsed(telegram_id=call.from_user.id))
         await bot.send_message(
             chat_id=ADMIN_ID,
-            text=bot_repl.send_message_admin_new_user_referral(
-                username=call.from_user.username,
-                user_id=call.from_user.id,
-                device=result_free.device_name,
-                referral_id=referral_id,
+            text=(
+                f"🎁 Реферальная подписка!\n"
+                f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
+                f"🆔 Пригласил: {referral_id}"
             ),
         )
-        await call.message.edit_text(
-            bot_repl.get_message_success_free_month(device), reply_markup=return_start()
+        await call.message.answer(
+            bot_repl.get_message_success_free_month("VPN"),
+            reply_markup=return_start(),
         )
         if referral_id:
             await user_interactor.add_referral_bonus(
