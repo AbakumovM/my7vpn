@@ -12,6 +12,7 @@ class BotSettings(BaseModel):
     token: str
     bot_name: str
     admin_id: int
+    admin_username: str = "my7vpnadmin"
 
 
 class PaymentSettings(BaseModel):
