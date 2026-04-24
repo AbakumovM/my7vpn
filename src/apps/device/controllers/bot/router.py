@@ -8,11 +8,9 @@ from dishka.integrations.aiogram import FromDishka
 from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.device.domain.commands import (
     ConfirmPayment,
-    CreateDevice,
     CreateDeviceFree,
     CreatePendingPayment,
     RejectPayment,
-    RenewSubscription,
 )
 from src.apps.device.domain.exceptions import PendingPaymentNotFound
 from src.apps.user.application.interactor import UserInteractor
@@ -29,7 +27,6 @@ from src.common.bot.keyboards.keyboards import (
     get_keyboard_approve_payment_or_cancel,
     get_keyboard_confirm_payment,
     get_keyboard_device_count,
-    get_keyboard_main_menu,
     get_keyboard_payment_link,
     get_keyboard_skip_email,
     get_keyboard_tariff,

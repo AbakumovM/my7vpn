@@ -1,4 +1,4 @@
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 
 
 class CallbackAction(StrEnum):
@@ -37,13 +37,6 @@ class ChoiceType(StrEnum):
     YES = "yes"
     NO = "no"
     STOP = "stop"
-
-
-class ActualTariff(IntEnum):
-    MONTH_1 = 150
-    MONTH_3 = 400
-    MONTH_6 = 700
-    MONTH_12 = 1200
 
 
 class PaymentStatus(StrEnum):

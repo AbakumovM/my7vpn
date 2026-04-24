@@ -1,6 +1,3 @@
-from src.infrastructure.config import app_config
-
-
 class TextManager:
     @staticmethod
     def get_main_menu_active(user_name: str, end_date: str, used: int, limit: int, balance: int) -> str:
@@ -27,10 +24,6 @@ class TextManager:
             "ВАЖНО☝️ Проверь наличие @никнейма в своем профиле. Если его нет, админ не сможет написать и выдать доступ!\n\n"
             "📱 Выберите тип устройства, для которого вы хотите настроить VPN:\n"
         )
-
-    @staticmethod
-    def get_message_for_added_device():
-        return "Выберите тип устройства, для которого вы хотите настроить VPN:"
 
     @staticmethod
     def get_subscription_info(
@@ -174,45 +167,6 @@ class TextManager:
         )
 
     @staticmethod
-    def get_message_admin_error():
-        return (
-            "Заявка получена! Пока админ проверяет ваш VPN, попробуйте:\n\n"
-            "1️⃣ Перезапустить приложение VPN.\n"
-            "2️⃣ Проверить интернет-соединение.\n\n"
-            "Если не поможет, мы уже в курсе и скоро вам поможем! 👨‍💻"
-        )
-
-    @staticmethod
-    def get_full_info_payment(device, duration, finally_payment, payment) -> str:
-        month = {
-            1: "1 месяц",
-            3: "3 месяца",
-            6: "6 месяцев",
-            12: "12 месяцев",
-        }
-        return (
-            f"🔐 <b>Подтвердите выбор VPN-подписки</b>\n\n"
-            f"✔ <b>Устройство:</b> {device}\n"
-            f"✔ <b>Срок:</b> {month.get(duration)}\n"
-            f"✔ <b>Стоимость:</b> {payment} ₽\n\n"
-            f"✔ <b>Сумма к оплате с учетом бонусов:</b> {finally_payment} ₽\n\n"
-            f"Хотите активировать VPN на этих условиях?\n\n"
-            f"👉 После подтверждения вам придут инструкции по установке и настройке."
-        )
-
-    @staticmethod
-    def get_message_invite_friend(referral_code: str) -> str:
-        return (
-            "🌟 <b>Программа «Приведи друга»</b>\n\n"
-            "Вы получаете <b>50₽ за каждого друга</b>, а ваш друг — <b>7 дней бесплатного VPN!</b>\n\n"
-            "Как это работает:\n"
-            "1️⃣ Поделитесь вашей персональной ссылкой 👇\n"
-            "2️⃣ Друг регистрируется по ней и активирует VPN\n"
-            "3️⃣ Вы получаете 50₽ на баланс, а друг — 7 дней бесплатно\n\n"
-            f"🔗 <b>Ваша реферальная ссылка:</b> https://t.me/{app_config.bot.bot_name}?start={referral_code}"
-        )
-
-    @staticmethod
     def get_message_success_free_month(device: str) -> str:
         return (
             "✅ Заявка отправлена администратору!\n\n"
@@ -255,20 +209,6 @@ class TextManager:
         )
 
     @staticmethod
-    def get_message_success_payment():
-        return (
-            "💳 <b>Спасибо! Ваша оплата принята.</b>\n\n"
-            "🔹 Наш специалист свяжется с вами в ближайшее время для завершения подключения.\n\n"
-            "<b>‼️ВАЖНО! Проверьте, чтоб у вас было указано 'Имя пользователя' в настройках\n"
-            "В противном случае наш админ не сможет вам написать</b>\n\n"
-            "📌 Пока вы можете перейти в раздел <b>/help</b> и выполнить шаги из инструкции для вашего устройства."
-        )
-
-    @staticmethod
-    def get_message_success_payment_update():
-        return "💳 <b>Спасибо! Ваша оплата принята.</b>\n\n🔹 Подписка продлена!\n\n"
-
-    @staticmethod
     def send_messages_end_pay(device_name: str) -> str:
         return (
             f"⏳ Внимание! Подписка на устройстве <b>{device_name}</b> заканчивается сегодня.\n\n"
@@ -284,52 +224,6 @@ class TextManager:
     def send_messages_cancel_choice() -> str:
         return "Жаль! Но вы всегда можете вернуться к этому, когда будет удобно 👍"
 
-    @staticmethod
-    def send_messages_for_admin_update(
-        username: str, user_id: int, device: str, duration: int, payment: int
-    ) -> str:
-        """
-        Generates an admin notification message about a user's VPN subscription renewal.
-
-        Args:
-            username (str): Username of the subscriber
-            user_id (int): Unique identifier of the subscriber
-            device (str): Type of device for VPN subscription
-            duration (int): Subscription duration period
-            payment (int): Payment amount received
-
-        Returns:
-            str: Formatted message containing subscription renewal details in Russian
-        """
-        return (
-            f"Пользователь продлил подписку VPN!\n"
-            f"👤 Имя: {username}\n"
-            f"🆔 ID: {user_id}\n"
-            f"📋 Критерии: девайс {device}, срок {duration}, тариф {payment}, сколько оплатил {payment}"
-        )
-
-    @staticmethod
-    def send_message_admin_new_device(
-        username: str, user_id: int, device: str, duration: int, payment: int
-    ) -> str:
-        return (
-            f"Пользователь хочет подключить VPN!\n"
-            f"👤 Имя: {username}\n"
-            f"🆔 ID: {user_id}\n"
-            f"📋 Критерии: девайс {device}, срок {duration}, сколько оплатил {payment}"
-        )
-
-    @staticmethod
-    def send_message_admin_new_user_referral(
-        username: str, user_id: int, referral_id: int, device: str
-    ) -> str:
-        return (
-            f"Пользователь хочет подключить VPN по реферальной ссылке!\n"
-            f"👤 Имя: {username}\n"
-            f"🆔 ID: {user_id}\n"
-            f"🆔 Кто пригласил: {referral_id}"
-            f"📋 Критерии: девайс {device}"
-        )
 
 
 bot_repl = TextManager()

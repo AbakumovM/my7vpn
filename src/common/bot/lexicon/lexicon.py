@@ -1,4 +1,4 @@
-from src.common.bot.keyboards.user_actions import CallbackAction, DeviceType
+from src.common.bot.keyboards.user_actions import CallbackAction
 
 LEXICON_COMMANDS_RU: dict[str, str] = {
     "start": "🏠 Главное меню",
@@ -17,12 +17,4 @@ LEXICON_INLINE_RU: dict[str, str] = {
     CallbackAction.NO: "❌ Отмена",
     CallbackAction.CANCEL: "❌ Отмена",
     CallbackAction.PAYMENT_SUCCESS: "✅ Я оплатил",
-}
-
-LEXICON_INLINE_DEVICE_RU: dict[str, str] = {
-    DeviceType.ANDROID_PHONE: "📱 Android",
-    DeviceType.IOS: "🍏 iPhone / iPad",
-    DeviceType.TV_ANDROID: "📺 Android TV",
-    DeviceType.COMPUTER_WINDOWS: "💻 Windows",
-    DeviceType.COMPUTER_MACOS: "💻 MacOS",
 }
