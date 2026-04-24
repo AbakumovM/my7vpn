@@ -2,6 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.user.adapters.orm import UserORM
+from src.apps.user.application.interfaces.view import ReferralStats
 
 
 class SQLAlchemyUserView:
@@ -48,3 +49,20 @@ class SQLAlchemyUserView:
             select(UserORM.telegram_id).where(UserORM.id == user_id)
         )
         return result.scalar_one_or_none()
+
+    async def get_referral_stats(self, telegram_id: int) -> ReferralStats:
+        count_result = await self._session.execute(
+            select(func.count(UserORM.id)).where(UserORM.referred_by == telegram_id)
+        )
+        invited_count = count_result.scalar_one() or 0
+
+        balance_result = await self._session.execute(
+            select(UserORM.balance).where(UserORM.telegram_id == telegram_id)
+        )
+        balance = balance_result.scalar_one_or_none() or 0
+
+        return ReferralStats(
+            invited_count=invited_count,
+            total_earned=invited_count * 50,
+            balance=balance,
+        )

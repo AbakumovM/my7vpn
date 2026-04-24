@@ -8,6 +8,7 @@ from src.apps.device.application.interfaces.view import (
     DeviceDetailInfo,
     DeviceSummary,
     ExpiringSubscriptionInfo,
+    SubscriptionInfo,
 )
 from src.apps.user.adapters.orm import UserORM
 
@@ -53,6 +54,42 @@ class SQLAlchemyDeviceView:
             end_date=end_date.strftime("%d.%m.%Y") if end_date else "",
             amount=amount,
             payment_date=payment_date.strftime("%d.%m.%Y") if payment_date else "",
+        )
+
+    async def get_subscription_info(self, telegram_id: int) -> SubscriptionInfo | None:
+        result = await self._session.execute(
+            select(
+                SubscriptionORM.end_date,
+                DeviceORM.device_limit,
+                UserORM.subscription_url,
+            )
+            .join(DeviceORM, SubscriptionORM.device_id == DeviceORM.id)
+            .join(UserORM, DeviceORM.user_id == UserORM.id)
+            .where(UserORM.telegram_id == telegram_id)
+            .where(SubscriptionORM.is_active.is_(True))
+            .order_by(SubscriptionORM.end_date.desc())
+            .limit(1)
+        )
+        row = result.first()
+        if row is None:
+            return None
+
+        payment_result = await self._session.execute(
+            select(PaymentORM.amount)
+            .join(SubscriptionORM, PaymentORM.subscription_id == SubscriptionORM.id)
+            .join(DeviceORM, SubscriptionORM.device_id == DeviceORM.id)
+            .join(UserORM, DeviceORM.user_id == UserORM.id)
+            .where(UserORM.telegram_id == telegram_id)
+            .order_by(PaymentORM.payment_date.desc())
+            .limit(1)
+        )
+        last_amount = payment_result.scalar_one_or_none()
+
+        return SubscriptionInfo(
+            end_date=row.end_date,
+            device_limit=row.device_limit,
+            last_payment_amount=last_amount,
+            subscription_url=row.subscription_url,
         )
 
     async def get_expiring_today(self) -> list[ExpiringSubscriptionInfo]:
