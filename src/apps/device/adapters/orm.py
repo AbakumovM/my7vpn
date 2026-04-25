@@ -70,3 +70,39 @@ class PendingPaymentORM(Base):
     balance_to_deduct = Column(Integer, nullable=False, default=0)
     device_limit = Column(Integer, nullable=False, default=1, server_default="1")
     created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class UserSubscriptionORM(Base):
+    __tablename__ = "user_subscriptions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    plan = Column(Integer, nullable=False)
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=False)
+    device_limit = Column(Integer, nullable=False, default=1, server_default="1")
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+
+    payments = relationship(
+        "UserPaymentORM", back_populates="subscription", cascade="all, delete-orphan"
+    )
+
+
+class UserPaymentORM(Base):
+    __tablename__ = "user_payments"
+
+    id = Column(Integer, primary_key=True)
+    user_telegram_id = Column(BigInteger, nullable=False, index=True)
+    subscription_id = Column(
+        Integer, ForeignKey("user_subscriptions.id", ondelete="SET NULL"), nullable=True
+    )
+    amount = Column(Integer, nullable=False)
+    duration = Column(Integer, nullable=False)
+    device_limit = Column(Integer, nullable=False, default=1, server_default="1")
+    payment_date = Column(DateTime(timezone=True), nullable=False)
+    currency = Column(String, default="RUB")
+    payment_method = Column(String, default="карта", nullable=True)
+    status = Column(String(20), nullable=False, default="success", server_default="success")
+    external_id = Column(String, nullable=True)
+
+    subscription = relationship("UserSubscriptionORM", back_populates="payments")
