@@ -3,7 +3,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.apps.device.adapters.orm import DeviceORM, PaymentORM, SubscriptionORM
+from src.apps.device.adapters.orm import DeviceORM, PaymentORM, SubscriptionORM, UserPaymentORM, UserSubscriptionORM
 from src.apps.device.application.interfaces.view import (
     DeviceDetailInfo,
     DeviceSummary,
@@ -57,6 +57,42 @@ class SQLAlchemyDeviceView:
         )
 
     async def get_subscription_info(self, telegram_id: int) -> SubscriptionInfo | None:
+        # Сначала проверяем новую модель (user_subscriptions)
+        new_result = await self._session.execute(
+            select(
+                UserSubscriptionORM.end_date,
+                UserSubscriptionORM.device_limit,
+            )
+            .join(UserORM, UserSubscriptionORM.user_id == UserORM.id)
+            .where(UserORM.telegram_id == telegram_id)
+            .where(UserSubscriptionORM.is_active.is_(True))
+            .order_by(UserSubscriptionORM.end_date.desc())
+            .limit(1)
+        )
+        new_row = new_result.first()
+
+        if new_row is not None:
+            payment_result = await self._session.execute(
+                select(UserPaymentORM.amount)
+                .where(UserPaymentORM.user_telegram_id == telegram_id)
+                .order_by(UserPaymentORM.payment_date.desc())
+                .limit(1)
+            )
+            last_amount = payment_result.scalar_one_or_none()
+
+            url_result = await self._session.execute(
+                select(UserORM.subscription_url).where(UserORM.telegram_id == telegram_id)
+            )
+            subscription_url = url_result.scalar_one_or_none()
+
+            return SubscriptionInfo(
+                end_date=new_row.end_date,
+                device_limit=new_row.device_limit,
+                last_payment_amount=last_amount,
+                subscription_url=subscription_url,
+            )
+
+        # Fallback: старая модель (devices → subscriptions)
         result = await self._session.execute(
             select(
                 SubscriptionORM.end_date,
