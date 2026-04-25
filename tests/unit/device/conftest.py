@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 from src.apps.device.application.interfaces.gateway import DeviceGateway
 from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway
+from src.apps.device.application.interfaces.subscription_gateway import SubscriptionGateway
 from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.infrastructure.database.uow import SQLAlchemyUoW
@@ -35,12 +36,18 @@ def mock_remnawave_gateway() -> AsyncMock:
 
 
 @pytest.fixture
+def mock_subscription_gateway() -> AsyncMock:
+    return AsyncMock(spec=SubscriptionGateway)
+
+
+@pytest.fixture
 def interactor(
     mock_gateway: AsyncMock,
     mock_user_gateway: AsyncMock,
     mock_uow: AsyncMock,
     mock_pending_gateway: AsyncMock,
     mock_remnawave_gateway: AsyncMock,
+    mock_subscription_gateway: AsyncMock,
 ) -> DeviceInteractor:
     return DeviceInteractor(
         gateway=mock_gateway,
@@ -48,4 +55,5 @@ def interactor(
         uow=mock_uow,
         pending_gateway=mock_pending_gateway,
         remnawave_gateway=mock_remnawave_gateway,
+        subscription_gateway=mock_subscription_gateway,
     )

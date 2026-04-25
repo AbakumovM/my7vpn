@@ -8,7 +8,7 @@ from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGa
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveUserInfo
 from src.apps.device.domain.commands import ConfirmPayment, CreateDevice, CreatePendingPayment, DeleteDevice, RenewSubscription
 from src.apps.device.domain.exceptions import DeviceNotFound, PendingPaymentNotFound, SubscriptionNotFound, UserDeviceNotFound
-from src.apps.device.domain.models import Device, PendingPayment, Subscription
+from src.apps.device.domain.models import Device, PendingPayment, Subscription, UserSubscription
 from src.apps.user.domain.exceptions import InsufficientBalance
 from src.apps.user.domain.models import User
 
@@ -34,6 +34,23 @@ def _make_device(
         end_date=end_date or (now + timedelta(days=30)),
     )
     return Device(id=device_id, user_id=111, device_name=device_name, subscription=sub)
+
+
+def _make_user_subscription(
+    telegram_id: int = 123,
+    sub_id: int = 10,
+    end_date: datetime | None = None,
+    device_limit: int = 1,
+) -> UserSubscription:
+    now = datetime.now(UTC)
+    return UserSubscription(
+        id=sub_id,
+        user_telegram_id=telegram_id,
+        plan=1,
+        start_date=now,
+        end_date=end_date or (now + timedelta(days=30)),
+        device_limit=device_limit,
+    )
 
 
 class TestCreateDevice:
@@ -310,19 +327,20 @@ def _make_remnawave_user_info(
 
 
 @pytest.mark.asyncio
-async def test_confirm_payment_new_creates_device_and_returns_result(
+async def test_confirm_payment_new_creates_subscription_and_returns_result(
     interactor: DeviceInteractor,
     mock_gateway: AsyncMock,
     mock_user_gateway: AsyncMock,
     mock_pending_gateway: AsyncMock,
     mock_remnawave_gateway: AsyncMock,
+    mock_subscription_gateway: AsyncMock,
     mock_uow: AsyncMock,
 ) -> None:
     pending = PendingPayment(
         id=5,
         user_telegram_id=123,
         action="new",
-        device_type="Android",
+        device_type="vpn",
         duration=1,
         amount=150,
         balance_to_deduct=0,
@@ -330,7 +348,8 @@ async def test_confirm_payment_new_creates_device_and_returns_result(
         created_at=datetime.now(UTC),
     )
     mock_pending_gateway.get_by_id.return_value = pending
-    mock_gateway.get_next_seq.return_value = 1
+    saved_sub = _make_user_subscription(telegram_id=123, sub_id=10)
+    mock_subscription_gateway.save.return_value = saved_sub
     mock_user_gateway.get_by_telegram_id.return_value = User(
         telegram_id=123, balance=0, remnawave_uuid=None, subscription_url=None
     )
@@ -338,11 +357,14 @@ async def test_confirm_payment_new_creates_device_and_returns_result(
 
     result = await interactor.confirm_payment(ConfirmPayment(pending_id=5))
 
+    mock_subscription_gateway.save.assert_called_once()
+    mock_subscription_gateway.save_payment.assert_called_once()
+    mock_gateway.save.assert_not_called()  # Device больше не создаётся
+    mock_pending_gateway.delete.assert_called_once_with(5)
+    mock_uow.commit.assert_called_once()
     assert result.action == "new"
     assert result.subscription_url == "https://sub.test/abc"
     assert result.user_telegram_id == 123
-    mock_pending_gateway.delete.assert_called_once_with(5)
-    mock_gateway.save.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -364,6 +386,7 @@ async def test_confirm_payment_new_creates_remnawave_user_when_no_uuid(
     mock_user_gateway: AsyncMock,
     mock_pending_gateway: AsyncMock,
     mock_remnawave_gateway: AsyncMock,
+    mock_subscription_gateway: AsyncMock,
     mock_uow: AsyncMock,
 ) -> None:
     """Новый пользователь (remnawave_uuid=None) → create_user вызывается, uuid и url сохраняются."""
@@ -371,7 +394,7 @@ async def test_confirm_payment_new_creates_remnawave_user_when_no_uuid(
         id=5,
         user_telegram_id=123,
         action="new",
-        device_type="Android",
+        device_type="vpn",
         duration=1,
         amount=150,
         balance_to_deduct=0,
@@ -379,7 +402,8 @@ async def test_confirm_payment_new_creates_remnawave_user_when_no_uuid(
         created_at=datetime.now(UTC),
     )
     mock_pending_gateway.get_by_id.return_value = pending
-    mock_gateway.get_next_seq.return_value = 1
+    saved_sub = _make_user_subscription(telegram_id=123, sub_id=10)
+    mock_subscription_gateway.save.return_value = saved_sub
     user = User(telegram_id=123, balance=0, remnawave_uuid=None, subscription_url=None)
     mock_user_gateway.get_by_telegram_id.return_value = user
     mock_remnawave_gateway.create_user.return_value = _make_remnawave_user_info()
@@ -405,6 +429,7 @@ async def test_confirm_payment_new_updates_remnawave_user_when_uuid_exists(
     mock_user_gateway: AsyncMock,
     mock_pending_gateway: AsyncMock,
     mock_remnawave_gateway: AsyncMock,
+    mock_subscription_gateway: AsyncMock,
     mock_uow: AsyncMock,
 ) -> None:
     """Существующий Remnawave-пользователь → update_user, не create_user."""
@@ -412,7 +437,7 @@ async def test_confirm_payment_new_updates_remnawave_user_when_uuid_exists(
         id=6,
         user_telegram_id=123,
         action="new",
-        device_type="iOS",
+        device_type="vpn",
         duration=3,
         amount=400,
         balance_to_deduct=0,
@@ -420,7 +445,8 @@ async def test_confirm_payment_new_updates_remnawave_user_when_uuid_exists(
         created_at=datetime.now(UTC),
     )
     mock_pending_gateway.get_by_id.return_value = pending
-    mock_gateway.get_next_seq.return_value = 2
+    saved_sub = _make_user_subscription(telegram_id=123, sub_id=11, device_limit=2)
+    mock_subscription_gateway.save.return_value = saved_sub
     user = User(
         telegram_id=123,
         balance=0,
@@ -437,29 +463,96 @@ async def test_confirm_payment_new_updates_remnawave_user_when_uuid_exists(
 
 
 @pytest.mark.asyncio
-async def test_confirm_payment_renew_creates_remnawave_user_for_migration(
+async def test_confirm_payment_renew_updates_subscription_and_remnawave(
     interactor: DeviceInteractor,
     mock_gateway: AsyncMock,
     mock_user_gateway: AsyncMock,
     mock_pending_gateway: AsyncMock,
     mock_remnawave_gateway: AsyncMock,
+    mock_subscription_gateway: AsyncMock,
     mock_uow: AsyncMock,
 ) -> None:
-    """Старый пользователь продлевает (remnawave_uuid=None) → миграция через create_user."""
+    """Продление нового пользователя: UserSubscription найден → update_user."""
+    now = datetime.now(UTC)
+    existing_sub = _make_user_subscription(
+        telegram_id=123,
+        sub_id=20,
+        end_date=now + timedelta(days=10),
+        device_limit=1,
+    )
+    mock_subscription_gateway.get_active_by_telegram_id.return_value = existing_sub
+    updated_sub = _make_user_subscription(
+        telegram_id=123,
+        sub_id=20,
+        end_date=now + timedelta(days=100),
+        device_limit=2,
+    )
+    mock_subscription_gateway.save.return_value = updated_sub
+    pending = PendingPayment(
+        id=8,
+        user_telegram_id=123,
+        action="renew",
+        device_type="vpn",
+        duration=3,
+        amount=400,
+        balance_to_deduct=0,
+        device_limit=2,
+        created_at=now,
+    )
+    mock_pending_gateway.get_by_id.return_value = pending
+    user = User(
+        telegram_id=123,
+        balance=0,
+        remnawave_uuid="rw-uuid",
+        subscription_url="https://sub.test/url",
+    )
+    mock_user_gateway.get_by_telegram_id.return_value = user
+
+    result = await interactor.confirm_payment(ConfirmPayment(pending_id=8))
+
+    mock_remnawave_gateway.update_user.assert_called_once()
+    mock_remnawave_gateway.create_user.assert_not_called()
+    mock_gateway.save.assert_not_called()  # legacy Device не трогается
+    call_kwargs = mock_remnawave_gateway.update_user.call_args.kwargs
+    assert call_kwargs["uuid"] == "rw-uuid"
+    assert call_kwargs["device_limit"] == 2
+    assert result.subscription_url == "https://sub.test/url"
+
+
+@pytest.mark.asyncio
+async def test_confirm_payment_renew_legacy_user_migrates_to_new_model(
+    interactor: DeviceInteractor,
+    mock_gateway: AsyncMock,
+    mock_user_gateway: AsyncMock,
+    mock_pending_gateway: AsyncMock,
+    mock_remnawave_gateway: AsyncMock,
+    mock_subscription_gateway: AsyncMock,
+    mock_uow: AsyncMock,
+) -> None:
+    """Legacy-пользователь продлевает: UserSubscription не найден → Device fallback + create_user + создаём UserSubscription."""
+    mock_subscription_gateway.get_active_by_telegram_id.return_value = None
+
     sub = Subscription(
         device_id=1,
         plan=1,
         start_date=datetime.now(UTC),
-        end_date=datetime.now(UTC),
+        end_date=datetime.now(UTC) + timedelta(days=5),
     )
     device = Device(id=1, user_id=123, device_name="Android 1", subscription=sub)
-    mock_gateway.get_by_name.return_value = device
+    mock_gateway.get_active_by_telegram_id.return_value = device
+
+    new_user_sub = _make_user_subscription(
+        telegram_id=123,
+        sub_id=30,
+        end_date=datetime.now(UTC) + timedelta(days=35),
+    )
+    mock_subscription_gateway.save.return_value = new_user_sub
+
     pending = PendingPayment(
         id=7,
         user_telegram_id=123,
         action="renew",
-        device_name="Android 1",
-        device_type="Android",
+        device_type="vpn",
         duration=1,
         amount=150,
         balance_to_deduct=0,
@@ -475,54 +568,9 @@ async def test_confirm_payment_renew_creates_remnawave_user_for_migration(
 
     result = await interactor.confirm_payment(ConfirmPayment(pending_id=7))
 
+    mock_gateway.get_active_by_telegram_id.assert_called_once_with(123)
+    mock_gateway.save.assert_called_once()  # Device обновлён
+    mock_subscription_gateway.save.assert_called_once()  # UserSubscription создан
+    mock_subscription_gateway.save_payment.assert_called_once()
     mock_remnawave_gateway.create_user.assert_called_once()
     assert result.subscription_url == "https://sub.test/migrated"
-
-
-@pytest.mark.asyncio
-async def test_confirm_payment_renew_updates_remnawave_when_uuid_exists(
-    interactor: DeviceInteractor,
-    mock_gateway: AsyncMock,
-    mock_user_gateway: AsyncMock,
-    mock_pending_gateway: AsyncMock,
-    mock_remnawave_gateway: AsyncMock,
-    mock_uow: AsyncMock,
-) -> None:
-    """Продление существующего Remnawave-пользователя → update_user с новым expire_at."""
-    sub = Subscription(
-        device_id=1,
-        plan=1,
-        start_date=datetime.now(UTC),
-        end_date=datetime.now(UTC),
-    )
-    device = Device(id=1, user_id=123, device_name="Android 1", subscription=sub)
-    mock_gateway.get_by_name.return_value = device
-    pending = PendingPayment(
-        id=8,
-        user_telegram_id=123,
-        action="renew",
-        device_name="Android 1",
-        device_type="Android",
-        duration=3,
-        amount=400,
-        balance_to_deduct=0,
-        device_limit=2,
-        created_at=datetime.now(UTC),
-    )
-    mock_pending_gateway.get_by_id.return_value = pending
-    user = User(
-        telegram_id=123,
-        balance=0,
-        remnawave_uuid="rw-uuid",
-        subscription_url="https://sub.test/url",
-    )
-    mock_user_gateway.get_by_telegram_id.return_value = user
-
-    result = await interactor.confirm_payment(ConfirmPayment(pending_id=8))
-
-    mock_remnawave_gateway.update_user.assert_called_once()
-    call_kwargs = mock_remnawave_gateway.update_user.call_args.kwargs
-    assert call_kwargs["uuid"] == "rw-uuid"
-    assert call_kwargs["device_limit"] == 2
-    assert call_kwargs["expire_at"] > datetime.now(UTC)
-    assert result.subscription_url == "https://sub.test/url"
