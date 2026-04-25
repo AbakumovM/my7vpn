@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.apps.device.adapters.gateway import (
     SQLAlchemyDeviceGateway,
     SQLAlchemyPendingPaymentGateway,
+    SQLAlchemySubscriptionGateway,
 )
 from src.apps.device.adapters.remnawave_gateway import RemnawaveGatewayImpl
 from src.apps.device.adapters.view import SQLAlchemyDeviceView
@@ -11,6 +12,7 @@ from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.device.application.interfaces.gateway import DeviceGateway
 from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway
+from src.apps.device.application.interfaces.subscription_gateway import SubscriptionGateway
 from src.apps.device.application.interfaces.view import DeviceView
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.infrastructure.config import AppConfig
@@ -28,6 +30,10 @@ class DeviceProvider(Provider):
     @provide
     def get_pending_gateway(self, session: AsyncSession) -> PendingPaymentGateway:
         return SQLAlchemyPendingPaymentGateway(session)
+
+    @provide
+    def get_subscription_gateway(self, session: AsyncSession) -> SubscriptionGateway:
+        return SQLAlchemySubscriptionGateway(session)
 
     @provide
     def get_view(self, session: AsyncSession) -> DeviceView:
@@ -49,6 +55,7 @@ class DeviceProvider(Provider):
         uow: SQLAlchemyUoW,
         pending_gateway: PendingPaymentGateway,
         remnawave_gateway: RemnawaveGateway,
+        subscription_gateway: SubscriptionGateway,
     ) -> DeviceInteractor:
         return DeviceInteractor(
             gateway=gateway,
@@ -56,4 +63,5 @@ class DeviceProvider(Provider):
             uow=uow,
             pending_gateway=pending_gateway,
             remnawave_gateway=remnawave_gateway,
+            subscription_gateway=subscription_gateway,
         )
