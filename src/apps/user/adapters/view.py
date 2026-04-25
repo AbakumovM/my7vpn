@@ -50,6 +50,12 @@ class SQLAlchemyUserView:
         )
         return result.scalar_one_or_none()
 
+    async def get_remnawave_uuid(self, telegram_id: int) -> str | None:
+        result = await self._session.execute(
+            select(UserORM.remnawave_uuid).where(UserORM.telegram_id == telegram_id)
+        )
+        return result.scalar_one_or_none()
+
     async def get_referral_stats(self, telegram_id: int) -> ReferralStats:
         count_result = await self._session.execute(
             select(func.count(UserORM.id)).where(UserORM.referred_by == telegram_id)

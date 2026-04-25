@@ -54,3 +54,6 @@ class RemnawaveGatewayImpl:
 
     async def disable_user(self, uuid: str) -> None:
         await self._client.disable_user(uuid)
+
+    async def get_hwid_devices_count(self, uuid: str) -> int:
+        return await self._client.get_hwid_devices_count(uuid)

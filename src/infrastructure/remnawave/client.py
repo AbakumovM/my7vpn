@@ -126,3 +126,11 @@ class RemnawaveClient:
             if resp.status_code >= 400:
                 raise RemnawaveAPIError(resp.status_code, resp.text)
         log.info("remnawave_user_disabled", uuid=uuid)
+
+    async def get_hwid_devices_count(self, uuid: str) -> int:
+        """Возвращает количество зарегистрированных HWID-устройств пользователя."""
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.get(f"/api/hwid/devices/{uuid}", headers=self._headers())
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+        return resp.json()["response"]["total"]
