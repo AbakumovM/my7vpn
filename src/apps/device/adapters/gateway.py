@@ -4,8 +4,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from src.apps.device.adapters.orm import DeviceORM, PaymentORM, PendingPaymentORM, SubscriptionORM
-from src.apps.device.domain.models import Device, PendingPayment, Subscription
+from src.apps.device.adapters.orm import (
+    DeviceORM,
+    PaymentORM,
+    PendingPaymentORM,
+    SubscriptionORM,
+    UserPaymentORM,
+    UserSubscriptionORM,
+)
+from src.apps.device.domain.models import Device, PendingPayment, Subscription, UserPayment, UserSubscription
 from src.apps.user.adapters.orm import UserORM
 
 
@@ -27,6 +34,20 @@ class SQLAlchemyDeviceGateway:
             select(DeviceORM)
             .options(joinedload(DeviceORM.subscription).joinedload(SubscriptionORM.payments))
             .where(DeviceORM.device_name == device_name)
+        )
+        row = result.unique().scalar_one_or_none()
+        return self._to_domain(row) if row else None
+
+    async def get_active_by_telegram_id(self, telegram_id: int) -> Device | None:
+        result = await self._session.execute(
+            select(DeviceORM)
+            .options(joinedload(DeviceORM.subscription).joinedload(SubscriptionORM.payments))
+            .join(UserORM, DeviceORM.user_id == UserORM.id)
+            .join(SubscriptionORM, DeviceORM.id == SubscriptionORM.device_id)
+            .where(UserORM.telegram_id == telegram_id)
+            .where(SubscriptionORM.is_active.is_(True))
+            .order_by(SubscriptionORM.end_date.desc())
+            .limit(1)
         )
         row = result.unique().scalar_one_or_none()
         return self._to_domain(row) if row else None
@@ -184,3 +205,77 @@ class SQLAlchemyPendingPaymentGateway:
         if row is not None:
             await self._session.delete(row)
             await self._session.flush()
+
+
+class SQLAlchemySubscriptionGateway:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_active_by_telegram_id(self, telegram_id: int) -> UserSubscription | None:
+        result = await self._session.execute(
+            select(UserSubscriptionORM)
+            .join(UserORM, UserSubscriptionORM.user_id == UserORM.id)
+            .where(UserORM.telegram_id == telegram_id)
+            .where(UserSubscriptionORM.is_active.is_(True))
+            .order_by(UserSubscriptionORM.end_date.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return UserSubscription(
+            id=row.id,
+            user_telegram_id=telegram_id,
+            plan=row.plan,
+            start_date=row.start_date,
+            end_date=row.end_date,
+            device_limit=row.device_limit,
+            is_active=row.is_active,
+        )
+
+    async def save(self, sub: UserSubscription) -> UserSubscription:
+        if sub.id is None:
+            user_result = await self._session.execute(
+                select(UserORM).where(UserORM.telegram_id == sub.user_telegram_id)
+            )
+            user_orm = user_result.scalar_one()
+            orm = UserSubscriptionORM(
+                user_id=user_orm.id,
+                plan=sub.plan,
+                start_date=sub.start_date,
+                end_date=sub.end_date,
+                device_limit=sub.device_limit,
+                is_active=sub.is_active,
+            )
+            self._session.add(orm)
+            await self._session.flush()
+            sub.id = orm.id
+        else:
+            result = await self._session.execute(
+                select(UserSubscriptionORM).where(UserSubscriptionORM.id == sub.id)
+            )
+            orm = result.scalar_one()
+            orm.end_date = sub.end_date
+            orm.device_limit = sub.device_limit
+            orm.plan = sub.plan
+            orm.start_date = sub.start_date
+            await self._session.flush()
+        return sub
+
+    async def save_payment(self, payment: UserPayment) -> UserPayment:
+        orm = UserPaymentORM(
+            user_telegram_id=payment.user_telegram_id,
+            subscription_id=payment.subscription_id,
+            amount=payment.amount,
+            duration=payment.duration,
+            device_limit=payment.device_limit,
+            payment_date=payment.payment_date,
+            currency=payment.currency,
+            payment_method=payment.payment_method,
+            status=payment.status,
+            external_id=payment.external_id,
+        )
+        self._session.add(orm)
+        await self._session.flush()
+        payment.id = orm.id  # type: ignore[misc]  # id set by ORM after flush
+        return payment
