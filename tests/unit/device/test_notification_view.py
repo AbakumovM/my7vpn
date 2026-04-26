@@ -1,11 +1,10 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.device.adapters.notification_view import SQLAlchemyNotificationView
-from src.apps.device.application.interfaces.notification_view import ExpiringUserSubscriptionInfo
 
 
 pytestmark = pytest.mark.asyncio
@@ -26,7 +25,7 @@ def _make_row(user_id: int, telegram_id: int, end_date: date) -> MagicMock:
     row.id = user_id
     row.telegram_id = telegram_id
     # SQLAlchemy возвращает datetime с timezone для DateTime(timezone=True)
-    row.end_date = datetime(end_date.year, end_date.month, end_date.day, tzinfo=timezone.utc)
+    row.end_date = datetime(end_date.year, end_date.month, end_date.day, tzinfo=UTC)
     return row
 
 
