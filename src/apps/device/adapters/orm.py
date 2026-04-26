@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from src.infrastructure.database.base import Base
@@ -106,3 +106,17 @@ class UserPaymentORM(Base):
     external_id = Column(String, nullable=True)
 
     subscription = relationship("UserSubscriptionORM", back_populates="payments")
+
+
+class NotificationLogORM(Base):
+    __tablename__ = "notification_log"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    days_before = Column(Integer, nullable=False)
+    sub_end_date = Column(Date, nullable=False)
+    sent_at = Column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "days_before", "sub_end_date", name="uq_notification_log"),
+    )
