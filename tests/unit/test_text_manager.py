@@ -1,7 +1,5 @@
 from datetime import date
 
-import pytest
-
 from src.common.bot.lexicon.text_manager import TextManager
 
 

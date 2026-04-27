@@ -313,5 +313,4 @@ class TextManager:
         )
 
 
-
 bot_repl = TextManager()
