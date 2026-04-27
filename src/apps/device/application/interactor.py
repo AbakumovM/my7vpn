@@ -67,6 +67,7 @@ class ConfirmPaymentResult:
     action: str  # "new" | "renew"
     subscription_url: str | None
     end_date: datetime
+    referrer_telegram_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -312,6 +313,11 @@ class DeviceInteractor:
         else:
             raise ValueError(f"Unknown pending action: {pending.action}")
 
+        # Считаем платные платежи до текущего (для определения первой оплаты)
+        existing_paid_count = await self._subscription_gateway.count_payments_for_user(
+            pending.user_telegram_id
+        )
+
         # Сохраняем Payment
         payment = UserPayment(
             user_telegram_id=pending.user_telegram_id,
@@ -353,6 +359,15 @@ class DeviceInteractor:
                     f"User {pending.user_telegram_id} has remnawave_uuid but no subscription_url"
                 )
 
+        # Реферальный бонус — только при первой платной покупке
+        referrer_telegram_id: int | None = None
+        if existing_paid_count == 0 and user.referred_by is not None:
+            referrer = await self._user_gateway.get_by_telegram_id(user.referred_by)
+            if referrer is not None:
+                referrer.balance += 50
+                await self._user_gateway.save(referrer)
+                referrer_telegram_id = referrer.telegram_id
+
         await self._user_gateway.save(user)
         await self._pending_gateway.delete(cmd.pending_id)
         await self._uow.commit()
@@ -363,6 +378,7 @@ class DeviceInteractor:
             action=pending.action,
             subscription_url=user.subscription_url,
             end_date=end_date,
+            referrer_telegram_id=referrer_telegram_id,
         )
 
     async def _save_device(self, cmd: CreateDevice, device_name: str, end_date: datetime) -> None:

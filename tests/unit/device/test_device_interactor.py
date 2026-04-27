@@ -673,3 +673,187 @@ class TestCreateDeviceFree:
         mock_remnawave_gateway.create_user.assert_not_awaited()
         mock_remnawave_gateway.update_user.assert_awaited_once()
         assert result.subscription_url == "https://sub.example.com/42"
+
+
+class TestConfirmPaymentReferralBonus:
+    def _make_pending(
+        self,
+        pending_id: int = 1,
+        user_telegram_id: int = 42,
+        action: str = "new",
+        duration: int = 1,
+        amount: int = 150,
+        device_limit: int = 1,
+        balance_to_deduct: int = 0,
+    ) -> PendingPayment:
+        return PendingPayment(
+            id=pending_id,
+            user_telegram_id=user_telegram_id,
+            action=action,
+            device_type="vpn",
+            duration=duration,
+            amount=amount,
+            balance_to_deduct=balance_to_deduct,
+            device_limit=device_limit,
+            created_at=datetime.now(UTC),
+        )
+
+    async def test_bonus_credited_on_first_paid_payment(
+        self,
+        interactor: DeviceInteractor,
+        mock_pending_gateway: AsyncMock,
+        mock_subscription_gateway: AsyncMock,
+        mock_user_gateway: AsyncMock,
+        mock_remnawave_gateway: AsyncMock,
+        mock_uow: AsyncMock,
+    ) -> None:
+        pending = self._make_pending()
+        mock_pending_gateway.get_by_id.return_value = pending
+
+        user = User(telegram_id=42, balance=0, referred_by=99, remnawave_uuid="rw-uuid")
+        user.subscription_url = "https://sub.example.com"
+        referrer = User(telegram_id=99, balance=100)
+
+        async def get_user(tid: int) -> User | None:
+            if tid == 42:
+                return user
+            if tid == 99:
+                return referrer
+            return None
+
+        mock_user_gateway.get_by_telegram_id.side_effect = get_user
+
+        saved_sub = _make_user_subscription(telegram_id=42, sub_id=10)
+        mock_subscription_gateway.get_active_by_telegram_id.return_value = None
+        mock_subscription_gateway.save.return_value = saved_sub
+        mock_subscription_gateway.count_payments_for_user.return_value = 0
+
+        from src.apps.device.domain.models import UserPayment
+        mock_subscription_gateway.save_payment.return_value = UserPayment(
+            id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
+        )
+        mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
+            uuid="rw-uuid", username="u42", subscription_url="https://sub.example.com",
+            expire_at=datetime.now(UTC) + timedelta(days=30),
+            status="ACTIVE", hwid_device_limit=1, telegram_id=42,
+        )
+
+        result = await interactor.confirm_payment(ConfirmPayment(pending_id=1))
+
+        assert result.referrer_telegram_id == 99
+        save_calls = mock_user_gateway.save.await_args_list
+        saved_users = [call.args[0] for call in save_calls]
+        referrer_saves = [u for u in saved_users if u.telegram_id == 99]
+        assert len(referrer_saves) == 1
+        assert referrer_saves[0].balance == 150  # 100 + 50
+
+    async def test_no_bonus_on_second_payment(
+        self,
+        interactor: DeviceInteractor,
+        mock_pending_gateway: AsyncMock,
+        mock_subscription_gateway: AsyncMock,
+        mock_user_gateway: AsyncMock,
+        mock_remnawave_gateway: AsyncMock,
+        mock_uow: AsyncMock,
+    ) -> None:
+        pending = self._make_pending()
+        mock_pending_gateway.get_by_id.return_value = pending
+
+        user = User(telegram_id=42, balance=0, referred_by=99, remnawave_uuid="rw-uuid")
+        user.subscription_url = "https://sub.example.com"
+        mock_user_gateway.get_by_telegram_id.return_value = user
+
+        saved_sub = _make_user_subscription(telegram_id=42, sub_id=10)
+        mock_subscription_gateway.get_active_by_telegram_id.return_value = None
+        mock_subscription_gateway.save.return_value = saved_sub
+        mock_subscription_gateway.count_payments_for_user.return_value = 1
+
+        from src.apps.device.domain.models import UserPayment
+        mock_subscription_gateway.save_payment.return_value = UserPayment(
+            id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
+        )
+        mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
+            uuid="rw-uuid", username="u42", subscription_url="https://sub.example.com",
+            expire_at=datetime.now(UTC) + timedelta(days=30),
+            status="ACTIVE", hwid_device_limit=1, telegram_id=42,
+        )
+
+        result = await interactor.confirm_payment(ConfirmPayment(pending_id=1))
+
+        assert result.referrer_telegram_id is None
+
+    async def test_no_bonus_without_referrer(
+        self,
+        interactor: DeviceInteractor,
+        mock_pending_gateway: AsyncMock,
+        mock_subscription_gateway: AsyncMock,
+        mock_user_gateway: AsyncMock,
+        mock_remnawave_gateway: AsyncMock,
+        mock_uow: AsyncMock,
+    ) -> None:
+        pending = self._make_pending()
+        mock_pending_gateway.get_by_id.return_value = pending
+
+        user = User(telegram_id=42, balance=0, referred_by=None, remnawave_uuid="rw-uuid")
+        user.subscription_url = "https://sub.example.com"
+        mock_user_gateway.get_by_telegram_id.return_value = user
+
+        saved_sub = _make_user_subscription(telegram_id=42, sub_id=10)
+        mock_subscription_gateway.get_active_by_telegram_id.return_value = None
+        mock_subscription_gateway.save.return_value = saved_sub
+        mock_subscription_gateway.count_payments_for_user.return_value = 0
+
+        from src.apps.device.domain.models import UserPayment
+        mock_subscription_gateway.save_payment.return_value = UserPayment(
+            id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
+        )
+        mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
+            uuid="rw-uuid", username="u42", subscription_url="https://sub.example.com",
+            expire_at=datetime.now(UTC) + timedelta(days=30),
+            status="ACTIVE", hwid_device_limit=1, telegram_id=42,
+        )
+
+        result = await interactor.confirm_payment(ConfirmPayment(pending_id=1))
+
+        assert result.referrer_telegram_id is None
+
+    async def test_no_bonus_when_referrer_not_found(
+        self,
+        interactor: DeviceInteractor,
+        mock_pending_gateway: AsyncMock,
+        mock_subscription_gateway: AsyncMock,
+        mock_user_gateway: AsyncMock,
+        mock_remnawave_gateway: AsyncMock,
+        mock_uow: AsyncMock,
+    ) -> None:
+        pending = self._make_pending()
+        mock_pending_gateway.get_by_id.return_value = pending
+
+        user = User(telegram_id=42, balance=0, referred_by=99, remnawave_uuid="rw-uuid")
+        user.subscription_url = "https://sub.example.com"
+
+        async def get_user(tid: int) -> User | None:
+            if tid == 42:
+                return user
+            return None  # referrer not found
+
+        mock_user_gateway.get_by_telegram_id.side_effect = get_user
+
+        saved_sub = _make_user_subscription(telegram_id=42, sub_id=10)
+        mock_subscription_gateway.get_active_by_telegram_id.return_value = None
+        mock_subscription_gateway.save.return_value = saved_sub
+        mock_subscription_gateway.count_payments_for_user.return_value = 0
+
+        from src.apps.device.domain.models import UserPayment
+        mock_subscription_gateway.save_payment.return_value = UserPayment(
+            id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
+        )
+        mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
+            uuid="rw-uuid", username="u42", subscription_url="https://sub.example.com",
+            expire_at=datetime.now(UTC) + timedelta(days=30),
+            status="ACTIVE", hwid_device_limit=1, telegram_id=42,
+        )
+
+        result = await interactor.confirm_payment(ConfirmPayment(pending_id=1))
+
+        assert result.referrer_telegram_id is None
