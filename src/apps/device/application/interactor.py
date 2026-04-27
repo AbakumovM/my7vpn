@@ -64,8 +64,15 @@ class PendingPaymentInfo:
 class ConfirmPaymentResult:
     user_telegram_id: int
     device_name: str
-    action: str              # "new" | "renew"
+    action: str  # "new" | "renew"
     subscription_url: str | None
+    end_date: datetime
+
+
+@dataclass(frozen=True)
+class FreeSubscriptionInfo:
+    user_telegram_id: int
+    subscription_url: str
     end_date: datetime
 
 
@@ -126,32 +133,60 @@ class DeviceInteractor:
         await self._uow.commit()
         return DeviceCreatedInfo(device_name=device_name, user_telegram_id=cmd.telegram_id)
 
-    async def create_device_free(self, cmd: CreateDeviceFree) -> DeviceCreatedInfo:
+    async def create_device_free(self, cmd: CreateDeviceFree) -> FreeSubscriptionInfo:
         user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
         if user is None:
             raise UserDeviceNotFound(cmd.telegram_id)
 
-        device_name = await self._generate_device_name(cmd.device_type)
         now = datetime.now(UTC)
         end_date = now + relativedelta(days=cmd.period_days)
 
-        subscription = Subscription(
-            device_id=0,
+        if user.remnawave_uuid is None:
+            rw_info = await self._remnawave_gateway.create_user(
+                telegram_id=cmd.telegram_id,
+                expire_at=end_date,
+                device_limit=cmd.device_limit,
+            )
+            user.remnawave_uuid = rw_info.uuid
+            user.subscription_url = rw_info.subscription_url
+        else:
+            await self._remnawave_gateway.update_user(
+                uuid=user.remnawave_uuid,
+                expire_at=end_date,
+                device_limit=cmd.device_limit,
+            )
+            if user.subscription_url is None:
+                raise ValueError(
+                    f"User {cmd.telegram_id} has remnawave_uuid but no subscription_url"
+                )
+
+        await self._user_gateway.save(user)
+
+        user_sub = UserSubscription(
+            user_telegram_id=cmd.telegram_id,
             plan=cmd.period_days,
             start_date=now,
             end_date=end_date,
+            device_limit=cmd.device_limit,
         )
-        subscription.payments = [Payment(subscription_id=0, amount=0, payment_date=now)]  # type: ignore[attr-defined]  # payments not declared in Subscription dataclass, set dynamically before ORM flush
-        device = Device(
-            user_id=user.telegram_id,
-            device_name=device_name,
-            created_at=now,
-            subscription=subscription,
-        )
+        user_sub = await self._subscription_gateway.save(user_sub)
 
-        await self._gateway.save(device)
+        payment = UserPayment(
+            user_telegram_id=cmd.telegram_id,
+            subscription_id=user_sub.id,
+            amount=0,
+            duration=cmd.period_days,
+            device_limit=cmd.device_limit,
+            payment_method="реферал",
+        )
+        await self._subscription_gateway.save_payment(payment)
         await self._uow.commit()
-        return DeviceCreatedInfo(device_name=device_name, user_telegram_id=cmd.telegram_id)
+
+        return FreeSubscriptionInfo(
+            user_telegram_id=cmd.telegram_id,
+            subscription_url=user.subscription_url,  # type: ignore[arg-type]  # set above or existed
+            end_date=end_date,
+        )
 
     async def delete_device(self, cmd: DeleteDevice) -> str:
         device = await self._gateway.get_by_id(cmd.device_id)
@@ -182,7 +217,9 @@ class DeviceInteractor:
             if renewal_user is None:
                 raise UserDeviceNotFound(device.user_id)
             if renewal_user.balance < cmd.balance_to_deduct:
-                raise InsufficientBalance(device.user_id, renewal_user.balance, cmd.balance_to_deduct)
+                raise InsufficientBalance(
+                    device.user_id, renewal_user.balance, cmd.balance_to_deduct
+                )
             renewal_user.balance -= cmd.balance_to_deduct
             await self._user_gateway.save(renewal_user)
 
@@ -334,7 +371,9 @@ class DeviceInteractor:
             raise UserDeviceNotFound(cmd.telegram_id)
 
         now = datetime.now(UTC)
-        subscription = Subscription(device_id=0, plan=cmd.period_months, start_date=now, end_date=end_date)
+        subscription = Subscription(
+            device_id=0, plan=cmd.period_months, start_date=now, end_date=end_date
+        )
         subscription.payments = [Payment(subscription_id=0, amount=cmd.amount, payment_date=now)]  # type: ignore[attr-defined]  # payments not declared in Subscription dataclass, set dynamically before ORM flush
         device = Device(
             user_id=user.telegram_id,
@@ -374,12 +413,16 @@ class DeviceInteractor:
             if renewal_user is None:
                 raise UserDeviceNotFound(device.user_id)
             if renewal_user.balance < cmd.balance_to_deduct:
-                raise InsufficientBalance(device.user_id, renewal_user.balance, cmd.balance_to_deduct)
+                raise InsufficientBalance(
+                    device.user_id, renewal_user.balance, cmd.balance_to_deduct
+                )
             renewal_user.balance -= cmd.balance_to_deduct
             await self._user_gateway.save(renewal_user)
 
         await self._gateway.save(device)
-        return SubscriptionInfo(device_name=device.device_name, end_date=sub.end_date, plan=sub.plan)
+        return SubscriptionInfo(
+            device_name=device.device_name, end_date=sub.end_date, plan=sub.plan
+        )
 
     async def reject_payment(self, cmd: RejectPayment) -> PendingPaymentInfo:
         pending = await self._pending_gateway.get_by_id(cmd.pending_id)

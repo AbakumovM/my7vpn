@@ -3,10 +3,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.apps.device.application.interactor import DeviceInteractor
+from src.apps.device.application.interactor import DeviceInteractor, FreeSubscriptionInfo
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveUserInfo
-from src.apps.device.domain.commands import ConfirmPayment, CreateDevice, CreatePendingPayment, DeleteDevice, RenewSubscription
+from src.apps.device.domain.commands import ConfirmPayment, CreateDevice, CreateDeviceFree, CreatePendingPayment, DeleteDevice, RenewSubscription
 from src.apps.device.domain.exceptions import DeviceNotFound, PendingPaymentNotFound, SubscriptionNotFound, UserDeviceNotFound
 from src.apps.device.domain.models import Device, PendingPayment, Subscription, UserSubscription
 from src.apps.user.domain.exceptions import InsufficientBalance
@@ -574,3 +574,102 @@ async def test_confirm_payment_renew_legacy_user_migrates_to_new_model(
     mock_subscription_gateway.save_payment.assert_called_once()
     mock_remnawave_gateway.create_user.assert_called_once()
     assert result.subscription_url == "https://sub.test/migrated"
+
+
+class TestCreateDeviceFree:
+    async def test_creates_user_subscription_and_remnawave_new_user(
+        self,
+        interactor: DeviceInteractor,
+        mock_user_gateway: AsyncMock,
+        mock_remnawave_gateway: AsyncMock,
+        mock_subscription_gateway: AsyncMock,
+        mock_uow: AsyncMock,
+    ) -> None:
+        user = User(telegram_id=42, balance=0, remnawave_uuid=None)
+        mock_user_gateway.get_by_telegram_id.return_value = user
+
+        rw_info = RemnawaveUserInfo(
+            uuid="rw-uuid-123",
+            username="user42",
+            subscription_url="https://sub.example.com/42",
+            expire_at=datetime.now(UTC) + timedelta(days=5),
+            status="ACTIVE",
+            hwid_device_limit=1,
+            telegram_id=42,
+        )
+        mock_remnawave_gateway.create_user.return_value = rw_info
+
+        saved_sub = UserSubscription(
+            id=77,
+            user_telegram_id=42,
+            plan=5,
+            start_date=datetime.now(UTC),
+            end_date=datetime.now(UTC) + timedelta(days=5),
+            device_limit=1,
+        )
+        mock_subscription_gateway.save.return_value = saved_sub
+
+        from src.apps.device.domain.models import UserPayment
+        saved_payment = UserPayment(
+            id=1, user_telegram_id=42, amount=0, duration=5, device_limit=1
+        )
+        mock_subscription_gateway.save_payment.return_value = saved_payment
+
+        cmd = CreateDeviceFree(telegram_id=42, device_type="vpn", period_days=5, device_limit=1)
+        result = await interactor.create_device_free(cmd)
+
+        assert isinstance(result, FreeSubscriptionInfo)
+        assert result.user_telegram_id == 42
+        assert result.subscription_url == "https://sub.example.com/42"
+        mock_remnawave_gateway.create_user.assert_awaited_once()
+        mock_subscription_gateway.save.assert_awaited_once()
+        mock_subscription_gateway.save_payment.assert_awaited_once()
+        mock_uow.commit.assert_awaited_once()
+
+    async def test_uses_update_user_when_remnawave_uuid_exists(
+        self,
+        interactor: DeviceInteractor,
+        mock_user_gateway: AsyncMock,
+        mock_remnawave_gateway: AsyncMock,
+        mock_subscription_gateway: AsyncMock,
+        mock_uow: AsyncMock,
+    ) -> None:
+        user = User(
+            telegram_id=42,
+            balance=0,
+            remnawave_uuid="existing-uuid",
+            subscription_url="https://sub.example.com/42",
+        )
+        mock_user_gateway.get_by_telegram_id.return_value = user
+
+        mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
+            uuid="existing-uuid",
+            username="user42",
+            subscription_url="https://sub.example.com/42",
+            expire_at=datetime.now(UTC) + timedelta(days=5),
+            status="ACTIVE",
+            hwid_device_limit=1,
+            telegram_id=42,
+        )
+
+        saved_sub = UserSubscription(
+            id=77,
+            user_telegram_id=42,
+            plan=5,
+            start_date=datetime.now(UTC),
+            end_date=datetime.now(UTC) + timedelta(days=5),
+            device_limit=1,
+        )
+        mock_subscription_gateway.save.return_value = saved_sub
+
+        from src.apps.device.domain.models import UserPayment
+        mock_subscription_gateway.save_payment.return_value = UserPayment(
+            id=2, user_telegram_id=42, amount=0, duration=5, device_limit=1
+        )
+
+        cmd = CreateDeviceFree(telegram_id=42, device_type="vpn", period_days=5, device_limit=1)
+        result = await interactor.create_device_free(cmd)
+
+        mock_remnawave_gateway.create_user.assert_not_awaited()
+        mock_remnawave_gateway.update_user.assert_awaited_once()
+        assert result.subscription_url == "https://sub.example.com/42"
