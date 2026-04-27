@@ -1,5 +1,5 @@
 # src/common/scheduler/tasks.py
-from datetime import datetime
+from datetime import UTC, datetime
 from io import StringIO
 
 import structlog
@@ -44,7 +44,11 @@ async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None
         gateway = await request_container.get(NotificationLogGateway)
         subscriptions = await view.get_subscriptions_to_notify(NOTIFICATION_DAYS)
         for sub in subscriptions:
-            if await gateway.is_sent(sub.user_id, sub.days_before, sub.end_date):
+            if await gateway.is_sent(
+                user_id=sub.user_id,
+                days_before=sub.days_before,
+                sub_end_date=sub.end_date,
+            ):
                 skipped += 1
                 continue
             try:
@@ -80,7 +84,7 @@ async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None
 
 async def send_admin_report(bot: Bot, sent: int, skipped: int, errors: int) -> None:
     report = (
-        f"🔔 Уведомления {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
+        f"🔔 Уведомления {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}\n"
         f"📬 Отправлено: {sent}\n"
         f"⏭ Пропущено (уже отправлено): {skipped}\n"
         f"❌ Ошибок: {errors}"
