@@ -1,6 +1,6 @@
 # tests/unit/device/test_send_expiry_notifications.py
 from datetime import date, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -12,6 +12,12 @@ from src.apps.device.application.interfaces.notification_view import (
 from src.common.scheduler.tasks import send_expiry_notifications
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _patch_admin_report():
+    with patch("src.common.scheduler.tasks.send_admin_report"):
+        yield
 
 
 def _make_sub(user_id: int, telegram_id: int, days_before: int) -> ExpiringUserSubscriptionInfo:

@@ -43,39 +43,39 @@ async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None
         view = await request_container.get(NotificationView)
         gateway = await request_container.get(NotificationLogGateway)
         subscriptions = await view.get_subscriptions_to_notify(NOTIFICATION_DAYS)
-
-    for sub in subscriptions:
-        if await gateway.is_sent(sub.user_id, sub.days_before, sub.end_date):
-            skipped += 1
-            continue
-        try:
-            text = TextManager.subscription_expiry_notice(sub.days_before, sub.end_date)
-            await bot.send_message(
-                chat_id=sub.telegram_id,
-                text=text,
-                reply_markup=_renew_keyboard(),
-            )
-            await gateway.mark_sent(
-                user_id=sub.user_id,
-                days_before=sub.days_before,
-                sub_end_date=sub.end_date,
-            )
-            log.info(
-                "notification_sent",
-                telegram_id=sub.telegram_id,
-                days_before=sub.days_before,
-                end_date=str(sub.end_date),
-            )
-            sent += 1
-        except Exception:
-            log.exception(
-                "notification_send_failed",
-                telegram_id=sub.telegram_id,
-                days_before=sub.days_before,
-            )
-            errors += 1
+        for sub in subscriptions:
+            if await gateway.is_sent(sub.user_id, sub.days_before, sub.end_date):
+                skipped += 1
+                continue
+            try:
+                text = TextManager.subscription_expiry_notice(sub.days_before, sub.end_date)
+                await bot.send_message(
+                    chat_id=sub.telegram_id,
+                    text=text,
+                    reply_markup=_renew_keyboard(),
+                )
+                await gateway.mark_sent(
+                    user_id=sub.user_id,
+                    days_before=sub.days_before,
+                    sub_end_date=sub.end_date,
+                )
+                log.info(
+                    "notification_sent",
+                    telegram_id=sub.telegram_id,
+                    days_before=sub.days_before,
+                    end_date=str(sub.end_date),
+                )
+                sent += 1
+            except Exception:
+                log.exception(
+                    "notification_send_failed",
+                    telegram_id=sub.telegram_id,
+                    days_before=sub.days_before,
+                )
+                errors += 1
 
     log.info("notification_job_done", sent=sent, skipped=skipped, errors=errors)
+    await send_admin_report(bot, sent, skipped, errors)
 
 
 async def send_admin_report(bot: Bot, sent: int, skipped: int, errors: int) -> None:
