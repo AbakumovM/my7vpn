@@ -18,5 +18,8 @@ RUN uv sync --no-dev --frozen
 # Копируем весь исходный код
 COPY . .
 
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 # Добавляем venv в PATH
 ENV PATH="/app/.venv/bin:$PATH"
