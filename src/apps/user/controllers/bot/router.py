@@ -10,17 +10,17 @@ from src.apps.device.application.interfaces.view import DeviceView
 from src.apps.user.application.interactor import UserInteractor
 from src.apps.user.application.interfaces.view import UserView
 from src.apps.user.domain.commands import GetOrCreateUser, GetReferralCode
-from src.apps.user.domain.exceptions import ReferralNotFound
 from src.common.bot.keyboards.keyboards import (
-    get_keyboard_device_count,
+    get_keyboard_confirm_delete_all,
     get_keyboard_friends,
-    get_keyboard_instruction_detail,
+    get_keyboard_hwid_devices,
     get_keyboard_instruction_platforms,
     get_keyboard_main_menu,
+    get_keyboard_referral_activate,
     get_keyboard_subscription,
     return_start,
 )
-from src.common.bot.keyboards.user_actions import CallbackAction, VpnAction
+from src.common.bot.keyboards.user_actions import CallbackAction
 from src.common.bot.lexicon.text_manager import bot_repl
 from src.infrastructure.config import app_config
 
@@ -50,31 +50,37 @@ async def handle_start(
     referral_code = msg.text.split(" ")[1] if len(msg.text.split(" ")) > 1 else None
 
     if referral_code:
-        try:
-            user = await interactor.get_or_create(
-                GetOrCreateUser(telegram_id=msg.from_user.id, referred_by_code=referral_code)
-            )
-        except ReferralNotFound:
+        # 1. Код существует → получаем telegram_id реферера
+        referral_id = await user_view.get_referrer_telegram_id(referral_code)
+        if referral_id is None:
             await msg.answer(bot_repl.get_message_error_referral(), reply_markup=return_start())
             return
 
-        if user.free_months:
+        # 2. Нельзя использовать свою ссылку
+        if referral_id == msg.from_user.id:
             await msg.answer(
-                "❌ Вы уже использовали бесплатный период ранее",
+                "❌ Нельзя использовать собственную реферальную ссылку.",
                 reply_markup=return_start(),
             )
             return
 
-        from src.apps.user.application.interfaces.gateway import UserGateway  # noqa: PLC0415
+        # 3. Только новые пользователи
+        existing_user_id = await user_view.get_user_id(msg.from_user.id)
+        if existing_user_id is not None:
+            await msg.answer(
+                "Вы уже зарегистрированы. Используйте /start для входа в меню.",
+                reply_markup=return_start(),
+            )
+            return
 
-        gateway: UserGateway = interactor._gateway  # type: ignore[attr-defined]
-        referrer = await gateway.get_by_referral_code(referral_code)
-        referral_id = referrer.telegram_id if referrer else None
+        # Создаём пользователя с привязкой к рефереру
+        await interactor.get_or_create(
+            GetOrCreateUser(telegram_id=msg.from_user.id, referred_by_code=referral_code)
+        )
 
-        # Реферальный flow — сразу к выбору количества устройств
         await msg.answer(
             bot_repl.get_start_message_free_month(msg.from_user.full_name),
-            reply_markup=get_keyboard_device_count(action=VpnAction.REFERRAL, referral_id=referral_id),
+            reply_markup=get_keyboard_referral_activate(referral_id=referral_id),
         )
         return
 
@@ -146,7 +152,7 @@ async def handle_my_subscription(
         await call.answer()
         return
 
-    from datetime import datetime, UTC  # noqa: PLC0415
+    from datetime import UTC, datetime  # noqa: PLC0415
 
     days_left = (sub.end_date - datetime.now(UTC)).days
     end_str = sub.end_date.strftime("%d.%m.%Y")
@@ -181,20 +187,14 @@ async def handle_friends(
 ) -> None:
     result = await interactor.get_referral_code(GetReferralCode(telegram_id=call.from_user.id))
     stats = await user_view.get_referral_stats(call.from_user.id)
+    bot_name = app_config.bot.bot_name
+    referral_link = f"https://t.me/{bot_name}?start={result.referral_code}"
     await call.message.answer(
-        bot_repl.get_friends_screen(stats.invited_count, stats.total_earned, stats.balance),
+        bot_repl.get_friends_screen(stats.invited_count, stats.total_earned, stats.balance, referral_link),
         reply_markup=get_keyboard_friends(result.referral_code),
     )
     await call.answer()
 
-
-@router.callback_query(F.data.startswith("copy_ref:"))
-async def handle_copy_ref(call: types.CallbackQuery) -> None:
-    referral_code = call.data.split(":", 1)[1]
-    bot_name = app_config.bot.bot_name
-    link = f"https://t.me/{bot_name}?start={referral_code}"
-    await call.message.answer(f"🔗 Ваша реферальная ссылка:\n\n<code>{link}</code>")
-    await call.answer()
 
 
 @router.message(Command("invite"))
@@ -205,8 +205,10 @@ async def handle_invite(
 ) -> None:
     result = await interactor.get_referral_code(GetReferralCode(telegram_id=msg.from_user.id))
     stats = await user_view.get_referral_stats(msg.from_user.id)
+    bot_name = app_config.bot.bot_name
+    referral_link = f"https://t.me/{bot_name}?start={result.referral_code}"
     await msg.answer(
-        bot_repl.get_friends_screen(stats.invited_count, stats.total_earned, stats.balance),
+        bot_repl.get_friends_screen(stats.invited_count, stats.total_earned, stats.balance, referral_link),
         reply_markup=get_keyboard_friends(result.referral_code),
     )
 
@@ -229,3 +231,125 @@ async def handle_web_login(
         f"🌐 Ваша ссылка для входа на сайт:\n{link}\n\n"
         f"Ссылка действительна {app_config.auth.bot_token_expire_minutes} минут.",
     )
+
+
+@router.callback_query(F.data == CallbackAction.CABINET)
+async def handle_cabinet(
+    call: types.CallbackQuery,
+    interactor: FromDishka[UserInteractor],
+) -> None:
+    try:
+        web_key = await interactor.get_or_create_web_key(call.from_user.id)
+    except Exception:
+        await call.answer("Сначала запустите /start", show_alert=True)
+        return
+    link = f"{app_config.auth.site_url}/cabinet/{web_key}"
+    await call.message.answer(
+        f"🌐 <b>Личный кабинет</b>\n\n"
+        f"Ваша постоянная ссылка:\n<code>{link}</code>\n\n"
+        f"Добавьте её в закладки — она всегда работает.",
+    )
+    await call.answer()
+
+
+async def _get_hwid_device_dicts(
+    telegram_id: int,
+    user_view: UserView,
+    remnawave_gateway: RemnawaveGateway,
+) -> list[dict] | None:
+    """Возвращает список устройств как dict, или None если нет uuid."""
+    remnawave_uuid = await user_view.get_remnawave_uuid(telegram_id)
+    if remnawave_uuid is None:
+        return None
+    try:
+        devices = await remnawave_gateway.get_hwid_devices(remnawave_uuid)
+    except Exception:
+        log.warning("hwid_devices_fetch_failed", telegram_id=telegram_id)
+        return []
+    return [
+        {
+            "hwid": d.hwid,
+            "platform": d.platform,
+            "os_version": d.os_version,
+            "device_model": d.device_model,
+        }
+        for d in devices
+    ]
+
+
+@router.callback_query(F.data == CallbackAction.HWID_DEVICES)
+async def handle_hwid_devices(
+    call: types.CallbackQuery,
+    user_view: FromDishka[UserView],
+    remnawave_gateway: FromDishka[RemnawaveGateway],
+) -> None:
+    devices = await _get_hwid_device_dicts(call.from_user.id, user_view, remnawave_gateway)
+    if devices is None:
+        await call.message.answer("У вас нет активной подписки.")
+        await call.answer()
+        return
+    await call.message.answer(
+        bot_repl.get_hwid_devices_screen(devices),
+        reply_markup=get_keyboard_hwid_devices(devices),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("hwid_del:"))
+async def handle_hwid_delete_one(
+    call: types.CallbackQuery,
+    user_view: FromDishka[UserView],
+    remnawave_gateway: FromDishka[RemnawaveGateway],
+) -> None:
+    hwid = call.data.split(":", 1)[1]
+    remnawave_uuid = await user_view.get_remnawave_uuid(call.from_user.id)
+    if remnawave_uuid is None:
+        await call.answer("Подписка не найдена", show_alert=True)
+        return
+    try:
+        await remnawave_gateway.delete_hwid_device(remnawave_uuid, hwid)
+    except Exception:
+        log.warning("hwid_delete_failed", uuid=remnawave_uuid, hwid=hwid)
+        await call.answer("Ошибка при удалении. Попробуйте позже.", show_alert=True)
+        return
+
+    # Обновляем список
+    devices = await _get_hwid_device_dicts(call.from_user.id, user_view, remnawave_gateway)
+    await call.message.edit_text(
+        bot_repl.get_hwid_devices_screen(devices or []),
+        reply_markup=get_keyboard_hwid_devices(devices or []),
+    )
+    await call.answer("Устройство удалено")
+
+
+@router.callback_query(F.data == CallbackAction.HWID_DELETE_ALL)
+async def handle_hwid_delete_all_prompt(call: types.CallbackQuery) -> None:
+    await call.message.answer(
+        bot_repl.get_hwid_delete_all_confirm(),
+        reply_markup=get_keyboard_confirm_delete_all(),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data == CallbackAction.HWID_DELETE_ALL_CONFIRM)
+async def handle_hwid_delete_all_confirm(
+    call: types.CallbackQuery,
+    user_view: FromDishka[UserView],
+    remnawave_gateway: FromDishka[RemnawaveGateway],
+) -> None:
+    remnawave_uuid = await user_view.get_remnawave_uuid(call.from_user.id)
+    if remnawave_uuid is None:
+        await call.answer("Подписка не найдена", show_alert=True)
+        return
+    try:
+        await remnawave_gateway.delete_all_hwid_devices(remnawave_uuid)
+    except Exception:
+        log.warning("hwid_delete_all_failed", uuid=remnawave_uuid)
+        await call.answer("Ошибка при удалении. Попробуйте позже.", show_alert=True)
+        return
+    await call.message.edit_text(
+        "✅ Все устройства удалены.\n\n"
+        "При следующем подключении к VPN устройство зарегистрируется заново.",
+        reply_markup=get_keyboard_hwid_devices([]),
+    )
+    await call.answer()

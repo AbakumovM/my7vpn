@@ -6,10 +6,10 @@ from src.common.bot.cbdata import (
     VpnCallback,
 )
 from src.common.bot.keyboards.user_actions import (
+    TARIFF_MATRIX,
     CallbackAction,
     ChoiceType,
     PaymentStatus,
-    TARIFF_MATRIX,
     VpnAction,
 )
 from src.common.bot.lexicon.lexicon import LEXICON_INLINE_RU
@@ -46,11 +46,40 @@ def get_keyboard_main_menu(has_subscription: bool) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="👫 Друзья", callback_data=CallbackAction.FRIENDS),
     ])
     rows.append([
-        InlineKeyboardButton(text="🌐 Кабинет", url=app_config.auth.site_url),
+        InlineKeyboardButton(text="🌐 Кабинет", callback_data=CallbackAction.CABINET),
         InlineKeyboardButton(text="💬 Поддержка", url=f"https://t.me/{app_config.bot.admin_username}"),
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_keyboard_hwid_devices(devices: list[dict]) -> InlineKeyboardMarkup:
+    """Список HWID-устройств с кнопками удаления."""
+    rows = []
+    for device in devices:
+        model = device.get("device_model") or "Устройство"
+        platform = device.get("platform") or ""
+        label = f"{model} ({platform})" if platform else model
+        rows.append([
+            InlineKeyboardButton(text=f"❌ {label}", callback_data=f"hwid_del:{device['hwid']}"),
+        ])
+    rows.append([
+        InlineKeyboardButton(text="🗑 Удалить все устройства", callback_data=CallbackAction.HWID_DELETE_ALL),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="◀️ Назад", callback_data=CallbackAction.MY_SUBSCRIPTION),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_keyboard_confirm_delete_all() -> InlineKeyboardMarkup:
+    """Подтверждение удаления всех устройств."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Да, удалить все", callback_data=CallbackAction.HWID_DELETE_ALL_CONFIRM),
+            InlineKeyboardButton(text="Отмена", callback_data=CallbackAction.HWID_DEVICES),
+        ],
+    ])
 
 
 def get_keyboard_subscription(is_expiring: bool = False) -> InlineKeyboardMarkup:
@@ -61,6 +90,7 @@ def get_keyboard_subscription(is_expiring: bool = False) -> InlineKeyboardMarkup
                 text="🔄 Продлить подписку",
                 callback_data=VpnCallback(action=VpnAction.RENEW).pack(),
             )],
+            [InlineKeyboardButton(text="📱 Мои устройства", callback_data=CallbackAction.HWID_DEVICES)],
             [
                 InlineKeyboardButton(text="📖 Инструкция", callback_data=CallbackAction.INSTRUCTION),
                 InlineKeyboardButton(text="🏠 Меню", callback_data=CallbackAction.START),
@@ -75,6 +105,7 @@ def get_keyboard_subscription(is_expiring: bool = False) -> InlineKeyboardMarkup
                 ),
                 InlineKeyboardButton(text="📖 Инструкция", callback_data=CallbackAction.INSTRUCTION),
             ],
+            [InlineKeyboardButton(text="📱 Мои устройства", callback_data=CallbackAction.HWID_DEVICES)],
             [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CallbackAction.START)],
         ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -84,7 +115,7 @@ def get_keyboard_device_count(
     action: str, referral_id: int | None = None
 ) -> InlineKeyboardMarkup:
     """Шаг 1: выбор количества устройств. 3 устройства выделены как хит."""
-    labels = {1: "📱 1 устройство", 2: "📱📱 2 устройства", 3: "⭐ 📱📱📱 3 устройства — хит"}
+    labels = {1: "📱 1 устройство", 2: "📱📱 2 устройства", 3: "📱📱📱 3 устройства — ⭐ хит"}
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for count in (1, 2, 3):
         keyboard.inline_keyboard.append([
@@ -200,11 +231,31 @@ def get_keyboard_instruction_detail() -> InlineKeyboardMarkup:
 def get_keyboard_friends(referral_code: str) -> InlineKeyboardMarkup:
     """Кнопки реферального экрана."""
     bot_name = app_config.bot.bot_name
-    share_text = f"Попробуй VPN — 7 дней бесплатно! https://t.me/{bot_name}?start={referral_code}"
+    share_text = f"Попробуй VPN — 5 дней бесплатно! https://t.me/{bot_name}?start={referral_code}"
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📤 Поделиться в Telegram", switch_inline_query=share_text)],
-        [InlineKeyboardButton(text="📋 Скопировать ссылку", callback_data=f"copy_ref:{referral_code}")],
         [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CallbackAction.START)],
+    ])
+
+
+def get_keyboard_referral_activate(referral_id: int) -> InlineKeyboardMarkup:
+    """Экран реферальной активации — одна кнопка."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🎁 Активировать бесплатный период",
+                callback_data=VpnCallback(
+                    action=VpnAction.REFERRAL,
+                    referral_id=referral_id,
+                ).pack(),
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🏠 Главное меню",
+                callback_data=CallbackAction.START,
+            )
+        ],
     ])
 
 
@@ -279,11 +330,11 @@ def get_keyboard_admin_confirm(pending_id: int) -> InlineKeyboardMarkup:
 
 
 def get_keyboard_vpn_received() -> InlineKeyboardMarkup:
-    """Клавиатура после получения VPN-ключа: инструкция + главное меню."""
+    """Клавиатура после получения VPN-ключа: скачать Happ + главное меню."""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="📖 Инструкция по подключению",
+                text="📥 Скачать Happ",
                 callback_data=CallbackAction.INSTRUCTION,
             )
         ],
