@@ -12,7 +12,13 @@ from src.apps.device.adapters.orm import (
     UserPaymentORM,
     UserSubscriptionORM,
 )
-from src.apps.device.domain.models import Device, PendingPayment, Subscription, UserPayment, UserSubscription
+from src.apps.device.domain.models import (
+    Device,
+    PendingPayment,
+    Subscription,
+    UserPayment,
+    UserSubscription,
+)
 from src.apps.user.adapters.orm import UserORM
 
 
@@ -279,3 +285,11 @@ class SQLAlchemySubscriptionGateway:
         await self._session.flush()
         payment.id = orm.id  # type: ignore[misc]  # id set by ORM after flush
         return payment
+
+    async def count_payments_for_user(self, telegram_id: int) -> int:
+        result = await self._session.execute(
+            select(func.count(UserPaymentORM.id))
+            .where(UserPaymentORM.user_telegram_id == telegram_id)
+            .where(UserPaymentORM.amount > 0)
+        )
+        return result.scalar_one()
