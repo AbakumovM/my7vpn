@@ -1,112 +1,112 @@
-# Docker Deployment Design
+# Дизайн: Docker-развертывание
 
-**Date:** 2026-04-27
-**Status:** Approved
-
----
-
-## Context
-
-The bot currently runs as a systemd service on a bare server with a native Postgres instance. There is no Dockerfile, no reverse proxy, and the web service is not publicly accessible. YooKassa webhooks require HTTPS, which is not yet configured.
-
-Goal: migrate the full stack to Docker Compose with nginx + Let's Encrypt on the host, preserving the existing database, with ~10 minutes of downtime during the migration window.
+**Дата:** 2026-04-27
+**Статус:** Утверждён
 
 ---
 
-## Architecture
+## Контекст
 
-**Approach:** Docker Compose for application services (postgres, bot, web) + nginx natively on the host as reverse proxy with SSL termination.
+Бот работает как systemd-сервис на голом сервере с нативным Postgres. Dockerfile нет, reverse proxy нет, веб-сервис публично недоступен. YooKassa требует HTTPS для webhook-уведомлений — это не настроено.
+
+Цель: перенести весь стек в Docker Compose с nginx + Let's Encrypt на хосте, сохранив существующую базу данных. Downtime при миграции — ~10 минут.
+
+---
+
+## Архитектура
+
+**Подход:** Docker Compose для сервисов приложения (postgres, bot, web) + nginx нативно на хосте как reverse proxy с SSL-терминацией.
 
 ```
-Internet
+Интернет
    │
    ▼
-nginx (host, port 80/443)
+nginx (хост, порты 80/443)
    │ proxy_pass 127.0.0.1:8000
    ▼
-[web container] uvicorn :8000
+[контейнер web] uvicorn :8000
    │
    └──────────────────────────┐
                               ▼
-[bot container]  ──────► [postgres container] :5432 (internal network only)
+[контейнер bot]  ──────► [контейнер postgres] :5432 (только внутренняя сеть)
 ```
 
 ---
 
-## Section 1: Docker Infrastructure
+## Секция 1: Docker-инфраструктура
 
-### Files
+### Файлы
 
-| File | Purpose |
-|------|---------|
-| `Dockerfile` | Single image for bot and web services |
-| `docker-compose.yml` | Local dev: postgres + pgadmin only (unchanged) |
+| Файл | Назначение |
+|------|-----------|
+| `Dockerfile` | Единый образ для сервисов bot и web |
+| `docker-compose.yml` | Локальная разработка: postgres + pgadmin (без изменений) |
 | `docker-compose.prod.yml` | Production: postgres + bot + web |
-| `.env.example` | Template with placeholder values (committed to git) |
-| `.env` | Real secrets (never committed) |
+| `.env.example` | Шаблон с placeholder-значениями (коммитится в git) |
+| `.env` | Реальные секреты (никогда не коммитятся) |
 
 ### Dockerfile
 
-- Base: `python:3.12-slim`
-- Package manager: `uv`
-- Single image; `CMD` differs per service in compose
+- Базовый образ: `python:3.12-slim`
+- Менеджер пакетов: `uv`
+- Единый образ; `CMD` задаётся в compose отдельно для bot и web
 
-### docker-compose.prod.yml services
+### Сервисы docker-compose.prod.yml
 
 **postgres:**
-- Image: `postgres:16-alpine`
-- Volume: `postgres_data` (named Docker volume, persistent)
-- Port: internal network only — not exposed to host
-- `container_name: vpn-postgres` — explicit name so migration commands are predictable
+- Образ: `postgres:16-alpine`
+- Volume: `postgres_data` (именованный Docker volume, персистентный)
+- Порт: только внутренняя сеть — наружу не открывается
+- `container_name: vpn-postgres` — фиксированное имя для предсказуемости команд миграции
 
 **bot:**
 - Build: `.` (Dockerfile)
 - Command: `python main_bot.py`
-- Depends on: `postgres`
-- Env: loaded from `.env`
+- Зависит от: `postgres`
+- Env: загружается из `.env`
 - Restart: `unless-stopped`
 
 **web:**
 - Build: `.` (Dockerfile)
 - Command: `uvicorn main_web:app --host 0.0.0.0 --port 8000`
-- Depends on: `postgres`
-- Port: `127.0.0.1:8000:8000` (localhost only — nginx proxies to it)
+- Зависит от: `postgres`
+- Порт: `127.0.0.1:8000:8000` (только localhost — nginx проксирует)
 - Restart: `unless-stopped`
 
-### .env changes for production
+### Изменения .env для production
 
-`DATABASE__URL` must use the Docker service name instead of `localhost`:
+`DATABASE__URL` меняется с `localhost` на имя Docker-сервиса:
 
 ```
 DATABASE__URL=postgresql+asyncpg://<user>:<pass>@postgres:5432/vpn
 ```
 
-All other variables remain the same.
+Все остальные переменные остаются без изменений.
 
 ---
 
-## Section 2: nginx + SSL
+## Секция 2: nginx + SSL
 
-### Installation (on host)
+### Установка на хост
 
 ```bash
 apt install nginx certbot python3-certbot-nginx
 ```
 
-### nginx config
+### Конфиг nginx
 
-File: `/etc/nginx/sites-available/vpn`
+Файл: `/etc/nginx/sites-available/vpn`
 
 ```nginx
 server {
     listen 80;
-    server_name <subdomain>;
-    # certbot adds HTTPS redirect automatically
+    server_name <поддомен>;
+    # certbot автоматически добавит редирект на HTTPS
 }
 
 server {
     listen 443 ssl;
-    server_name <subdomain>;
+    server_name <поддомен>;
 
     location / {
         proxy_pass http://127.0.0.1:8000;
@@ -121,56 +121,55 @@ server {
 ### SSL
 
 ```bash
-certbot --nginx -d <subdomain>
+certbot --nginx -d <поддомен>
 ```
 
-certbot modifies the nginx config to add SSL certificates and HTTP→HTTPS redirect. Auto-renewal is handled by certbot's systemd timer (installed by default).
+certbot модифицирует конфиг nginx: добавляет SSL-сертификат и редирект HTTP→HTTPS. Авторенью работает автоматически через systemd-таймер certbot (устанавливается по умолчанию).
 
-### Firewall
+### Файрволл
 
-Open only ports 80 and 443. Port 8000 stays closed to external traffic — only nginx accesses it via localhost.
+Открываем только порты 80 и 443. Порт 8000 остаётся закрытым снаружи — только nginx обращается к нему через localhost.
 
-### YooKassa webhook URL
+### URL webhook для YooKassa
 
-Set in YooKassa dashboard: `https://<subdomain>/api/v1/yookassa/webhook`
+Указать в настройках платежа: `https://<поддомен>/api/v1/yookassa/webhook`
 
 ---
 
-## Section 3: Migration Runbook
+## Секция 3: Runbook миграции
 
-### Pre-migration (do in advance, no downtime)
+### Подготовка заранее (без downtime)
 
-1. Point subdomain A record → server IP; wait for DNS propagation
-2. `git pull` latest code on server
-3. `docker compose -f docker-compose.prod.yml build` — pre-build image
-4. Install nginx on host, open ports 80/443 — does not affect running bot
-5. Create nginx config, run `nginx -t` to verify syntax
+1. Настроить A-запись поддомена → IP сервера; дождаться распространения DNS
+2. `git pull` на сервере — обновить код
+3. `docker compose -f docker-compose.prod.yml build` — собрать образ заранее
+4. Установить nginx, открыть порты 80/443 — не затрагивает работающий бот
+5. Создать конфиг nginx, проверить `nginx -t`
 
-### Migration window (~10 min downtime)
+### Окно миграции (~10 минут downtime)
 
-1. `systemctl stop vpn-bot` — stop current bot
-2. `pg_dump -U <pg_user> vpn > /tmp/vpn_backup_$(date +%Y%m%d).sql` — dump database
-3. `docker compose -f docker-compose.prod.yml up -d postgres` — start postgres container
-4. Wait for postgres to be ready (health check)
-5. `docker exec -i vpn-postgres psql -U <pg_user> vpn < /tmp/vpn_backup_$(date +%Y%m%d).sql` — restore data (container name is fixed as `vpn-postgres`)
-6. Verify data: spot-check row counts in key tables
-7. `docker compose -f docker-compose.prod.yml up -d bot web` — start application containers
-8. `certbot --nginx -d <subdomain>` — obtain SSL certificate
-9. Test: bot responds to `/start`, `GET https://<subdomain>/health` returns 200
-10. `systemctl disable vpn-bot` — disable old systemd service
+1. `systemctl stop vpn-bot` — остановить бот
+2. `pg_dump -U <pg_user> vpn > /tmp/vpn_backup_$(date +%Y%m%d).sql` — дамп базы
+3. `docker compose -f docker-compose.prod.yml up -d postgres` — поднять postgres в Docker
+4. Дождаться готовности postgres (healthcheck)
+5. `docker exec -i vpn-postgres psql -U <pg_user> vpn < /tmp/vpn_backup_$(date +%Y%m%d).sql` — восстановить данные (имя контейнера фиксировано: `vpn-postgres`)
+6. Проверить данные: количество строк в ключевых таблицах
+7. `docker compose -f docker-compose.prod.yml up -d bot web` — поднять сервисы
+8. `certbot --nginx -d <поддомен>` — получить SSL-сертификат
+9. Проверить: бот отвечает на `/start`, `GET https://<поддомен>/health` возвращает 200
+10. `systemctl disable vpn-bot` — отключить старый systemd-сервис
 
-### Rollback (if anything goes wrong)
+### Откат (если что-то пошло не так)
 
 1. `docker compose -f docker-compose.prod.yml down`
-2. `systemctl start vpn-bot` — bot is back on native postgres immediately
-3. Native postgres is untouched and available as fallback
+2. `systemctl start vpn-bot` — бот сразу снова работает на нативном postgres
 
-Keep native postgres running for at least one week after successful migration before removing it.
+Нативный postgres не трогаем и не удаляем минимум неделю после успешной миграции.
 
 ---
 
-## Out of Scope
+## Вне scope
 
-- Admin panel UI (post-migration work)
-- Redis FSM storage (post-migration work)
-- CI/CD pipeline (manual deploy for now)
+- UI панели администратора (после миграции)
+- Redis FSM Storage (после миграции)
+- CI/CD pipeline (пока деплой вручную)
