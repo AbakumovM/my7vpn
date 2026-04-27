@@ -7,18 +7,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+RUN useradd -m -u 1000 appuser
+
 WORKDIR /app
 
 # Копируем файлы зависимостей отдельно для кэширования слоя
-COPY pyproject.toml uv.lock ./
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
 
 # Устанавливаем только prod-зависимости из lockfile
 RUN uv sync --no-dev --frozen
 
 # Копируем весь исходный код
-COPY . .
+COPY --chown=appuser:appuser . .
 
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Добавляем venv в PATH
