@@ -72,3 +72,9 @@ class SQLAlchemyUserView:
             total_earned=invited_count * 50,
             balance=balance,
         )
+
+    async def get_referrer_telegram_id(self, referral_code: str) -> int | None:
+        result = await self._session.execute(
+            select(UserORM.telegram_id).where(UserORM.referral_code == referral_code)
+        )
+        return result.scalar_one_or_none()
