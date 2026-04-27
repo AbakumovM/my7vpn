@@ -47,7 +47,7 @@ async def handle_start(
     device_view: FromDishka[DeviceView],
     remnawave_gateway: FromDishka[RemnawaveGateway],
 ) -> None:
-    referral_code = msg.text.split(" ")[1] if len(msg.text.split(" ")) > 1 else None
+    referral_code = msg.text.split(" ")[1] if msg.text and len(msg.text.split(" ")) > 1 else None
 
     if referral_code:
         # 1. Код существует → получаем telegram_id реферера
