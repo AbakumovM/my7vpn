@@ -1,11 +1,10 @@
-from datetime import UTC, date, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.device.adapters.notification_gateway import SQLAlchemyNotificationLogGateway
-
 
 pytestmark = pytest.mark.asyncio
 

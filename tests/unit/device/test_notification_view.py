@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.device.adapters.notification_view import SQLAlchemyNotificationView
 
-
 pytestmark = pytest.mark.asyncio
 
 
@@ -37,10 +36,14 @@ async def test_get_subscriptions_to_notify_returns_correct_days_before(
     end_in_1 = today + timedelta(days=1)
 
     mock_result = MagicMock()
-    mock_result.__iter__ = MagicMock(return_value=iter([
-        _make_row(user_id=1, telegram_id=100, end_date=end_in_7),
-        _make_row(user_id=2, telegram_id=200, end_date=end_in_1),
-    ]))
+    mock_result.__iter__ = MagicMock(
+        return_value=iter(
+            [
+                _make_row(user_id=1, telegram_id=100, end_date=end_in_7),
+                _make_row(user_id=2, telegram_id=200, end_date=end_in_1),
+            ]
+        )
+    )
     session.execute = AsyncMock(return_value=mock_result)
 
     result = await view.get_subscriptions_to_notify([7, 3, 1, 0])

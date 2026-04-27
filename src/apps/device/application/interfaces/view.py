@@ -18,15 +18,6 @@ class DeviceDetailInfo:
 
 
 @dataclass(frozen=True)
-class ExpiringSubscriptionInfo:
-    telegram_id: int
-    device_name: str
-    plan: int
-    start_date: datetime
-    end_date: datetime
-
-
-@dataclass(frozen=True)
 class SubscriptionInfo:
     end_date: datetime | None
     device_limit: int
@@ -40,7 +31,5 @@ class DeviceView(Protocol):
     async def list_for_user_by_id(self, user_id: int) -> list[DeviceSummary]: ...
 
     async def get_full_info(self, device_id: int) -> DeviceDetailInfo | None: ...
-
-    async def get_expiring_today(self) -> list[ExpiringSubscriptionInfo]: ...
 
     async def get_subscription_info(self, telegram_id: int) -> SubscriptionInfo | None: ...

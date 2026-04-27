@@ -8,14 +8,12 @@ from src.apps.device.application.interfaces.gateway import DeviceGateway
 from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway
 from src.apps.device.application.interfaces.subscription_gateway import SubscriptionGateway
-from src.apps.device.application.interfaces.view import ExpiringSubscriptionInfo
 from src.apps.device.domain.commands import (
     ConfirmPayment,
     CreateDevice,
     CreateDeviceFree,
     CreatePendingPayment,
     DeleteDevice,
-    GetExpiringSubscriptions,
     RejectPayment,
     RenewSubscription,
 )
@@ -25,7 +23,14 @@ from src.apps.device.domain.exceptions import (
     SubscriptionNotFound,
     UserDeviceNotFound,
 )
-from src.apps.device.domain.models import Device, Payment, PendingPayment, Subscription, UserPayment, UserSubscription
+from src.apps.device.domain.models import (
+    Device,
+    Payment,
+    PendingPayment,
+    Subscription,
+    UserPayment,
+    UserSubscription,
+)
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.apps.user.domain.exceptions import InsufficientBalance
 from src.infrastructure.database.uow import SQLAlchemyUoW
@@ -188,11 +193,6 @@ class DeviceInteractor:
             end_date=sub.end_date,
             plan=sub.plan,
         )
-
-    async def get_expiring_subscriptions(
-        self, cmd: GetExpiringSubscriptions
-    ) -> list[ExpiringSubscriptionInfo]:
-        raise NotImplementedError("Use DeviceView.get_expiring_today() directly")
 
     async def create_pending_payment(self, cmd: CreatePendingPayment) -> PendingPaymentInfo:
         now = datetime.now(UTC)

@@ -34,11 +34,6 @@ class RenewSubscription:
 
 
 @dataclass(frozen=True)
-class GetExpiringSubscriptions:
-    pass
-
-
-@dataclass(frozen=True)
 class CreatePendingPayment:
     user_telegram_id: int
     action: str            # "new" | "renew"

@@ -1,13 +1,16 @@
-from datetime import date
-
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.apps.device.adapters.orm import DeviceORM, PaymentORM, SubscriptionORM, UserPaymentORM, UserSubscriptionORM
+from src.apps.device.adapters.orm import (
+    DeviceORM,
+    PaymentORM,
+    SubscriptionORM,
+    UserPaymentORM,
+    UserSubscriptionORM,
+)
 from src.apps.device.application.interfaces.view import (
     DeviceDetailInfo,
     DeviceSummary,
-    ExpiringSubscriptionInfo,
     SubscriptionInfo,
 )
 from src.apps.user.adapters.orm import UserORM
@@ -127,28 +130,3 @@ class SQLAlchemyDeviceView:
             last_payment_amount=last_amount,
             subscription_url=row.subscription_url,
         )
-
-    async def get_expiring_today(self) -> list[ExpiringSubscriptionInfo]:
-        today = date.today()
-        result = await self._session.execute(
-            select(
-                UserORM.telegram_id,
-                DeviceORM.device_name,
-                SubscriptionORM.plan,
-                SubscriptionORM.start_date,
-                SubscriptionORM.end_date,
-            )
-            .join(DeviceORM, UserORM.id == DeviceORM.user_id)
-            .join(SubscriptionORM, DeviceORM.id == SubscriptionORM.device_id)
-            .where(func.date(SubscriptionORM.end_date) == today)
-        )
-        return [
-            ExpiringSubscriptionInfo(
-                telegram_id=row.telegram_id,
-                device_name=row.device_name,
-                plan=row.plan,
-                start_date=row.start_date,
-                end_date=row.end_date,
-            )
-            for row in result
-        ]
