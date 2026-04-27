@@ -10,6 +10,12 @@ class ReferralNotFound(Exception):
         self.referral_code = referral_code
 
 
+class SelfReferralError(Exception):
+    def __init__(self, telegram_id: int) -> None:
+        super().__init__(f"User {telegram_id} cannot use their own referral code")
+        self.telegram_id = telegram_id
+
+
 class InsufficientBalance(Exception):
     def __init__(self, telegram_id: int, balance: int, required: int) -> None:
         super().__init__(f"User {telegram_id} has {balance}, required {required}")
