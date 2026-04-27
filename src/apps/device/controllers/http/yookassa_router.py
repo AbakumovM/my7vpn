@@ -80,6 +80,15 @@ async def yookassa_webhook(
     # Уведомляем пользователя
     await _notify_user(bot, result)
 
+    if result.referrer_telegram_id is not None:
+        try:
+            await bot.send_message(
+                chat_id=result.referrer_telegram_id,
+                text="🎉 Ваш друг оформил подписку! Вам начислено 50 руб. на баланс.",
+            )
+        except Exception:
+            log.warning("referral_bonus_notify_failed", referrer_id=result.referrer_telegram_id)
+
     # Уведомляем админа (информационно, без кнопок)
     end_str = result.end_date.strftime("%d.%m.%Y")
     action_label = "Новая подписка" if result.action == "new" else "Продление"
@@ -102,20 +111,20 @@ async def _notify_user(bot: Bot, result: ConfirmPaymentResult) -> None:
         if result.action == "new":
             await bot.send_message(
                 chat_id=result.user_telegram_id,
-                text="✅ Оплата получена автоматически! Ваша ссылка для подключения 👇",
+                text=(
+                    "✅ Оплата прошла успешно!\n\n"
+                    "Ваша ссылка для подключения — скопируйте и вставьте в приложение Happ:\n\n"
+                    f"<code>{result.subscription_url}</code>"
+                ),
+                reply_markup=get_keyboard_vpn_received(),
             )
         else:
             end_str = result.end_date.strftime("%d.%m.%Y")
             await bot.send_message(
                 chat_id=result.user_telegram_id,
-                text=f"✅ Подписка продлена до {end_str}. Ваша ссылка для подключения 👇",
+                text=f"✅ Подписка продлена до {end_str}.",
+                reply_markup=get_keyboard_vpn_received(),
             )
-        await bot.send_message(
-            chat_id=result.user_telegram_id,
-            text=f"`{result.subscription_url}`",
-            parse_mode="Markdown",
-            reply_markup=get_keyboard_vpn_received(),
-        )
     else:
         end_str = result.end_date.strftime("%d.%m.%Y")
         await bot.send_message(

@@ -16,7 +16,6 @@ from src.apps.device.domain.exceptions import PendingPaymentNotFound
 from src.apps.user.application.interactor import UserInteractor
 from src.apps.user.application.interfaces.view import UserView
 from src.apps.user.domain.commands import (
-    AddReferralBonus,
     MarkFreeMonthUsed,
     SetUserEmail,
 )
@@ -33,7 +32,6 @@ from src.common.bot.keyboards.keyboards import (
     get_keyboard_vpn_received,
     return_start,
 )
-from src.infrastructure.yookassa.client import YooKassaClient
 from src.common.bot.keyboards.user_actions import (
     CallbackAction,
     ChoiceType,
@@ -43,6 +41,7 @@ from src.common.bot.keyboards.user_actions import (
 from src.common.bot.lexicon.text_manager import bot_repl
 from src.common.bot.states import EmailInput
 from src.infrastructure.config import app_config
+from src.infrastructure.yookassa.client import YooKassaClient
 
 log = structlog.get_logger(__name__)
 router = Router()
@@ -139,7 +138,7 @@ async def _show_payment_link(
 
     message = msg_or_call.message if isinstance(msg_or_call, types.CallbackQuery) else msg_or_call
     await message.answer(
-        bot_repl.get_approve_payment_link(amount=amount, confirmation_url=created.confirmation_url),
+        bot_repl.get_approve_payment_link(amount=amount, confirmation_url=created.confirmation_url, action=action),
         reply_markup=get_keyboard_payment_link(),
     )
 
@@ -227,6 +226,45 @@ async def handle_vpn_flow(
     balance = callback_data.balance
     choice = callback_data.choice
     payment_status = callback_data.payment_status
+
+    # Реферальный бесплатный период — обрабатываем первым, минуя все платёжные шаги
+    if action == VpnAction.REFERRAL:
+        try:
+            await call.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            await call.answer()
+            return
+        await call.answer()
+
+        result_free = await interactor.create_device_free(
+            CreateDeviceFree(
+                telegram_id=call.from_user.id,
+                device_type="vpn",
+                period_days=app_config.payment.free_month,
+                device_limit=1,
+            )
+        )
+        await user_interactor.mark_free_month_used(MarkFreeMonthUsed(telegram_id=call.from_user.id))
+        log.info(
+            "device_created_free",
+            device_type="vpn",
+            referral_id=referral_id,
+        )
+        await bot.send_message(
+            chat_id=ADMIN_ID,
+            text=(
+                f"🎁 Реферальная подписка!\n"
+                f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
+                f"🆔 Пригласил: {referral_id}"
+            ),
+        )
+        await call.message.answer(
+            "✅ Бесплатный период активирован!\n\n"
+            "Ваша ссылка для подключения — скопируйте и вставьте в приложение Happ:\n\n"
+            f"<code>{result_free.subscription_url}</code>",
+            reply_markup=get_keyboard_vpn_received(),
+        )
+        return
 
     # Шаг 1: выбор количества устройств
     if device_limit is None:
@@ -410,48 +448,6 @@ async def handle_vpn_flow(
         )
         return
 
-    # Шаг 6c: реферальный бесплатный период
-    if action == VpnAction.REFERRAL:
-        try:
-            await call.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            await call.answer()
-            return
-        await call.answer()
-        result_free = await interactor.create_device_free(
-            CreateDeviceFree(
-                telegram_id=call.from_user.id,
-                device_type="vpn",
-                period_days=app_config.payment.free_month,
-            )
-        )
-        log.info(
-            "device_created_free",
-            device_name=result_free.device_name,
-            device_type="vpn",
-            referral_id=referral_id,
-        )
-        await user_interactor.mark_free_month_used(MarkFreeMonthUsed(telegram_id=call.from_user.id))
-        await bot.send_message(
-            chat_id=ADMIN_ID,
-            text=(
-                f"🎁 Реферальная подписка!\n"
-                f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
-                f"🆔 Пригласил: {referral_id}"
-            ),
-        )
-        await call.message.answer(
-            bot_repl.get_message_success_free_month("VPN"),
-            reply_markup=return_start(),
-        )
-        if referral_id:
-            await user_interactor.add_referral_bonus(
-                AddReferralBonus(referrer_telegram_id=referral_id, amount=50)
-            )
-            log.info("referral_bonus_added", referrer_id=referral_id, amount=50)
-            await bot.send_message(
-                chat_id=referral_id, text=bot_repl.get_message_new_user_referral()
-            )
 
 
 @router.callback_query(AdminConfirmCallback.filter(F.action == "confirm"), F.from_user.id == ADMIN_ID)
@@ -477,20 +473,20 @@ async def handle_admin_confirm(
         if result.action == "new":
             await bot.send_message(
                 chat_id=result.user_telegram_id,
-                text="✅ Оплата подтверждена! Ваша ссылка для подключения 👇",
+                text=(
+                    "✅ Оплата прошла успешно!\n\n"
+                    "Ваша ссылка для подключения — скопируйте и вставьте в приложение Happ:\n\n"
+                    f"<code>{result.subscription_url}</code>"
+                ),
+                reply_markup=get_keyboard_vpn_received(),
             )
         else:
             end_str = result.end_date.strftime("%d.%m.%Y") if result.end_date else "—"
             await bot.send_message(
                 chat_id=result.user_telegram_id,
-                text=f"✅ Подписка продлена до {end_str}. Ваша ссылка для подключения 👇",
+                text=f"✅ Подписка продлена до {end_str}.",
+                reply_markup=get_keyboard_vpn_received(),
             )
-        await bot.send_message(
-            chat_id=result.user_telegram_id,
-            text=f"`{result.subscription_url}`",
-            parse_mode="Markdown",
-            reply_markup=get_keyboard_vpn_received(),
-        )
     else:
         end_str = result.end_date.strftime("%d.%m.%Y") if result.end_date else "—"
         await bot.send_message(
@@ -500,6 +496,14 @@ async def handle_admin_confirm(
         )
 
     await call.message.edit_text(f"✅ Выдано: {result.device_name}")
+    if result.referrer_telegram_id is not None:
+        try:
+            await bot.send_message(
+                chat_id=result.referrer_telegram_id,
+                text="🎉 Ваш друг оформил подписку! Вам начислено 50 руб. на баланс.",
+            )
+        except Exception:
+            log.warning("referral_bonus_notify_failed", referrer_id=result.referrer_telegram_id)
     await call.answer("Готово!")
     log.info(
         "payment_confirmed",
