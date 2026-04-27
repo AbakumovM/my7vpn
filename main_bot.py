@@ -22,7 +22,7 @@ from src.apps.user.controllers.bot.router import router as user_router
 from src.apps.user.domain.exceptions import InsufficientBalance, ReferralNotFound, UserNotFound
 from src.common.bot.keyboards.commands import set_commands
 from src.common.bot.router import router as common_router
-from src.common.scheduler.tasks import check_pending_subscriptions
+from src.common.scheduler.tasks import send_expiry_notifications
 from src.infrastructure.bot.throttling import ThrottlingMiddleware
 from src.infrastructure.config import app_config
 from src.infrastructure.logging.setup import configure_logging
@@ -118,16 +118,16 @@ async def main() -> None:
 
     dp.startup.register(set_commands)
 
-    scheduler = AsyncIOScheduler(timezone=zoneinfo.ZoneInfo("Asia/Yekaterinburg"))
+    scheduler = AsyncIOScheduler(timezone=zoneinfo.ZoneInfo("Europe/Moscow"))
     scheduler.add_job(
-        check_pending_subscriptions,
-        trigger=CronTrigger(hour=9, minute=0),
-        id="check_subscriptions",
+        send_expiry_notifications,
+        trigger=CronTrigger(hour=10, minute=0),
+        id="send_expiry_notifications",
         kwargs={"bot": bot, "container": container},
     )
     scheduler.start()
 
-    job = scheduler.get_job("check_subscriptions")
+    job = scheduler.get_job("send_expiry_notifications")
     if job and job.next_run_time:
         log.info(
             "scheduler_next_run",
