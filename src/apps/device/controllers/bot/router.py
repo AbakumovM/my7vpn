@@ -623,10 +623,19 @@ async def handle_migrate_callback(
         return
     if call.message is None:
         return
-    result = await interactor.migrate_user_to_remnawave(MigrateUser(telegram_id=call.from_user.id))
-    await call.message.edit_text(
-        f"✅ Готово! Твоя подписка активна до {result.end_date.strftime('%d.%m.%Y')}.\n\n"
-        f"Вот твой новый ключ подписки:"
-    )
-    await call.message.answer(result.subscription_url)
-    await call.answer()
+    try:
+        result = await interactor.migrate_user_to_remnawave(
+            MigrateUser(telegram_id=call.from_user.id)
+        )
+        await call.message.edit_text(
+            f"✅ Готово! Твоя подписка активна до {result.end_date.strftime('%d.%m.%Y')}.\n\n"
+            f"Вот твой новый ключ подписки:"
+        )
+        await call.message.answer(result.subscription_url)
+    except Exception:  # noqa: BLE001
+        log.exception("migrate_callback_failed", telegram_id=call.from_user.id)
+        await call.message.edit_text(
+            "❌ Произошла ошибка. Попробуй позже или обратись в поддержку."
+        )
+    finally:
+        await call.answer()
