@@ -12,6 +12,7 @@ from src.apps.device.adapters.orm import (
     UserPaymentORM,
     UserSubscriptionORM,
 )
+from src.apps.device.domain.exceptions import SubscriptionNotFound
 from src.apps.device.domain.models import (
     Device,
     PendingPayment,
@@ -137,8 +138,6 @@ class SQLAlchemyDeviceGateway:
             await self._session.flush()
 
     async def get_active_subscription_end_date(self, telegram_id: int) -> datetime:
-        from src.apps.device.domain.exceptions import SubscriptionNotFound  # noqa: PLC0415
-
         result = await self._session.execute(
             select(SubscriptionORM.end_date)
             .join(DeviceORM, SubscriptionORM.device_id == DeviceORM.id)
@@ -151,8 +150,7 @@ class SQLAlchemyDeviceGateway:
         )
         end_date = result.scalar_one_or_none()
         if end_date is None:
-            # sentinel: no active old subscription for this user
-            raise SubscriptionNotFound(device_id=0)
+            raise SubscriptionNotFound(telegram_id=telegram_id)
         return end_date
 
     @staticmethod
