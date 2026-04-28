@@ -54,3 +54,8 @@ class ConfirmPayment:
 @dataclass(frozen=True)
 class RejectPayment:
     pending_id: int
+
+
+@dataclass(frozen=True)
+class MigrateUser:
+    telegram_id: int

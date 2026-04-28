@@ -14,6 +14,7 @@ from src.apps.device.domain.commands import (
     CreateDeviceFree,
     CreatePendingPayment,
     DeleteDevice,
+    MigrateUser,
     RejectPayment,
     RenewSubscription,
 )
@@ -73,6 +74,12 @@ class ConfirmPaymentResult:
 @dataclass(frozen=True)
 class FreeSubscriptionInfo:
     user_telegram_id: int
+    subscription_url: str
+    end_date: datetime
+
+
+@dataclass(frozen=True)
+class MigrateUserResult:
     subscription_url: str
     end_date: datetime
 
@@ -456,6 +463,57 @@ class DeviceInteractor:
         await self._pending_gateway.delete(cmd.pending_id)
         await self._uow.commit()
         return info
+
+    async def migrate_user_to_remnawave(self, cmd: MigrateUser) -> MigrateUserResult:
+        user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
+
+        # Идемпотентность: уже мигрирован
+        if user.remnawave_uuid is not None:
+            active_sub = await self._subscription_gateway.get_active_by_telegram_id(cmd.telegram_id)
+            return MigrateUserResult(
+                subscription_url=user.subscription_url,  # type: ignore[arg-type]  # set during initial migration, always str at this point
+                end_date=active_sub.end_date,  # type: ignore[union-attr]  # active sub always exists when remnawave_uuid is set
+            )
+
+        # Берём end_date из старой подписки
+        end_date = await self._gateway.get_active_subscription_end_date(cmd.telegram_id)
+
+        # Создаём Remnawave-аккаунт
+        remnawave_user = await self._remnawave_gateway.create_user(
+            telegram_id=cmd.telegram_id,
+            expire_at=end_date,
+            device_limit=1,
+        )
+        user.remnawave_uuid = remnawave_user.uuid
+        user.subscription_url = remnawave_user.subscription_url
+
+        # Создаём UserSubscription + UserPayment
+        now_dt = datetime.now(UTC)
+        subscription = UserSubscription(
+            user_telegram_id=cmd.telegram_id,
+            plan=(end_date - now_dt).days,
+            start_date=now_dt,
+            end_date=end_date,
+            device_limit=1,
+            is_active=True,
+        )
+        payment = UserPayment(
+            user_telegram_id=cmd.telegram_id,
+            amount=0,
+            duration=(end_date - now_dt).days,
+            device_limit=1,
+            payment_method="migration",
+        )
+
+        await self._subscription_gateway.save(subscription)
+        await self._subscription_gateway.save_payment(payment)
+        await self._user_gateway.save(user)
+        await self._uow.commit()
+
+        return MigrateUserResult(
+            subscription_url=user.subscription_url,  # type: ignore[arg-type]  # set above, always str at this point
+            end_date=end_date,
+        )
 
     async def _generate_device_name(self, device_type: str) -> str:
         seq = await self._gateway.get_next_seq()

@@ -857,3 +857,89 @@ class TestConfirmPaymentReferralBonus:
         result = await interactor.confirm_payment(ConfirmPayment(pending_id=1))
 
         assert result.referrer_telegram_id is None
+
+
+class TestMigrateUserToRemnawave:
+    @pytest.mark.asyncio
+    async def test_creates_remnawave_account_and_subscription(
+        self,
+        interactor: DeviceInteractor,
+        mock_user_gateway: AsyncMock,
+        mock_gateway: AsyncMock,
+        mock_remnawave_gateway: AsyncMock,
+        mock_subscription_gateway: AsyncMock,
+        mock_uow: AsyncMock,
+    ):
+        """Создаёт Remnawave-аккаунт, UserSubscription и UserPayment для пользователя."""
+        from datetime import UTC, datetime, timedelta
+        from unittest.mock import MagicMock
+
+        now = datetime.now(UTC)
+        end_date = now + timedelta(days=15)
+
+        user = User(telegram_id=123, balance=0, remnawave_uuid=None, subscription_url=None)
+
+        mock_user_gateway.get_by_telegram_id.return_value = user
+        mock_gateway.get_active_subscription_end_date.return_value = end_date
+        mock_remnawave_gateway.create_user.return_value = MagicMock(
+            uuid="new-uuid",
+            subscription_url="https://sub.url/new",
+        )
+
+        from src.apps.device.domain.commands import MigrateUser
+        from src.apps.device.application.interactor import MigrateUserResult
+        result = await interactor.migrate_user_to_remnawave(MigrateUser(telegram_id=123))
+
+        assert isinstance(result, MigrateUserResult)
+        assert result.subscription_url == "https://sub.url/new"
+        assert result.end_date == end_date
+        mock_remnawave_gateway.create_user.assert_called_once_with(
+            telegram_id=123,
+            expire_at=end_date,
+            device_limit=1,
+        )
+        mock_subscription_gateway.save.assert_called_once()
+        mock_subscription_gateway.save_payment.assert_called_once()
+        mock_uow.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_idempotent_when_already_migrated(
+        self,
+        interactor: DeviceInteractor,
+        mock_user_gateway: AsyncMock,
+        mock_remnawave_gateway: AsyncMock,
+        mock_subscription_gateway: AsyncMock,
+    ):
+        """Если remnawave_uuid уже есть — не создаёт дубль, возвращает текущие данные."""
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        end_date = now + timedelta(days=10)
+
+        user = User(
+            telegram_id=123,
+            balance=0,
+            remnawave_uuid="existing-uuid",
+            subscription_url="https://sub.url/existing",
+        )
+
+        active_sub = UserSubscription(
+            user_telegram_id=123,
+            plan=10,
+            start_date=now,
+            end_date=end_date,
+            device_limit=1,
+            is_active=True,
+        )
+
+        mock_user_gateway.get_by_telegram_id.return_value = user
+        mock_subscription_gateway.get_active_by_telegram_id.return_value = active_sub
+
+        from src.apps.device.domain.commands import MigrateUser
+        from src.apps.device.application.interactor import MigrateUserResult
+        result = await interactor.migrate_user_to_remnawave(MigrateUser(telegram_id=123))
+
+        assert isinstance(result, MigrateUserResult)
+        assert result.subscription_url == "https://sub.url/existing"
+        assert result.end_date == end_date
+        mock_remnawave_gateway.create_user.assert_not_called()
