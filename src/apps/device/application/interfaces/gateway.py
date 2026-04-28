@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Protocol
 
 from src.apps.device.domain.models import Device
@@ -15,3 +16,5 @@ class DeviceGateway(Protocol):
     async def save(self, device: Device) -> None: ...
 
     async def delete(self, device: Device) -> None: ...
+
+    async def get_active_subscription_end_date(self, telegram_id: int) -> datetime: ...
