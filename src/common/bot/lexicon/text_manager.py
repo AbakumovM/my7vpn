@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 
 class TextManager:
@@ -32,12 +32,21 @@ class TextManager:
         )
 
     @staticmethod
-    def get_start_message_free_month(user_name):
+    def get_start_message_free_month(user_name: str) -> str:
         return (
             f"👋 Привет, {user_name}!\n\n"
-            "🎉 <b>Поздравляем!</b> Вы получили бесплатные 5 дней подписки на одно устройство.\n\n"
-            "ВАЖНО☝️ Проверь наличие @никнейма в своем профиле. Если его нет, админ не сможет написать и выдать доступ!\n\n"
-            "📱 Выберите тип устройства, для которого вы хотите настроить VPN:\n"
+            f"🎉 <b>Поздравляем!</b> Вы получили 5 дней ZEVSgate бесплатно.\n"
+            f"Активируйте подписку и пользуйтесь на любом устройстве.\n\n"
+            f"<b>Что такое ZEVSgate?</b>\n"
+            f"• Быстрый и надёжный VPN\n"
+            f"• До 3 устройств по одной подписке\n"
+            f"• Несколько серверов — и мы их расширяем\n"
+            f"• Работает везде: телефон, ноутбук, телевизор\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🎁 <b>Приглашай друзей и получай бонусы</b>\n"
+            f"➜ Ты получаешь <b>50₽</b> на баланс\n"
+            f"➜ Друг получает <b>5 дней бесплатно</b>\n\n"
+            
         )
 
     @staticmethod
@@ -59,7 +68,7 @@ class TextManager:
 
         if subscription_url:
             text += f"\n🔗 <b>Ключ подписки (для настройки):</b>\n<code>{subscription_url}</code>\n\n"
-            text += f"⚡ Скопируйте его и вставьте в приложение (happ, Hiddify, v2rayNG и др.)"
+            text += "⚡ Скопируйте его и вставьте в приложение (happ, Hiddify, v2rayNG и др.)"
 
         return text
 
@@ -152,7 +161,7 @@ class TextManager:
             "android_phone": (
                 "📱 <b>Подключение на Android</b>\n\n"
                 "1️⃣ Скачайте <b>Happ</b>:\n"
-                '<a href="https://play.google.com/store/apps/details?id=com.happproxy">→ Google Play</a>  '
+                '<a href="https://play.google.com/store/apps/details?id=com.happproxy">→ Google Play</a>\n'
                 '<a href="https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk">→ APK (если нет Play)</a>\n\n'
                 "2️⃣ Откройте приложение\n\n"
                 "3️⃣ Нажмите <b>➕</b> и вставьте ваш ключ подписки\n\n"
@@ -192,7 +201,7 @@ class TextManager:
             "tv": (
                 "📺 <b>Подключение на Android TV</b>\n\n"
                 "1️⃣ Скачайте <b>Happ</b>:\n"
-                '<a href="https://play.google.com/store/apps/details?id=com.happproxy">→ Google Play</a>  '
+                '<a href="https://play.google.com/store/apps/details?id=com.happproxy">→ Google Play</a>\n'
                 '<a href="https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk">→ APK</a>\n\n'
                 "2️⃣ Откройте приложение\n\n"
                 "3️⃣ Добавьте ваш ключ подписки\n\n"
@@ -294,22 +303,33 @@ class TextManager:
         formatted = end_date.strftime("%d.%m.%Y")
         if days_before == 7:
             return (
-                f"📅 Ваша подписка истекает через 7 дней ({formatted}).\n"
-                f"Продлите заранее, чтобы не прерываться."
+                f"📅 ZEVSgate: ваша подписка истекает через 7 дней ({formatted}).\n"
+                f"Продлите заранее — оставайтесь под защитой без пауз."
             )
         if days_before == 3:
             return (
-                f"⏳ До окончания подписки осталось 3 дня ({formatted}).\n"
-                f"Не забудьте продлить."
+                f"⏳ ZEVSgate: до окончания подписки 3 дня ({formatted}).\n"
+                f"Лучше продлить сейчас, чтобы не забыть."
             )
         if days_before == 1:
             return (
-                f"⚠️ Завтра истекает ваша подписка ({formatted}).\n"
-                f"Продлите сегодня."
+                f"⚠️ ZEVSgate: подписка истекает завтра ({formatted}).\n"
+                f"Продлите сегодня — это займёт минуту."
             )
+        # days_before == 0
         return (
-            "🔴 Сегодня истекает ваша подписка.\n"
-            "Продлите, чтобы сохранить доступ к VPN."
+            "🔴 ZEVSgate: сегодня последний день подписки.\n"
+            "Продлите доступ, чтобы VPN продолжал работать."
+        )
+
+
+    @staticmethod
+    def migration_notification(end_date: datetime) -> str:
+        return (
+            f"🔄 Мы обновили сервис!\n\n"
+            f"Нажми кнопку ниже чтобы получить новый ключ подписки.\n"
+            f"Срок действия сохраняется: до {end_date.strftime('%d.%m.%Y')}.\n"
+            f"Устройств: 1."
         )
 
 

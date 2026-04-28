@@ -372,3 +372,14 @@ def return_start():
         ]
     )
     return keyboard
+
+
+def get_keyboard_migrate() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text="🔑 Получить новый ключ",
+                callback_data=VpnCallback(action=VpnAction.MIGRATE).pack(),
+            )
+        ]]
+    )

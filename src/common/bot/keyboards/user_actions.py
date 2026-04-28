@@ -18,6 +18,14 @@ class CallbackAction(StrEnum):
     RENEW_SUB = "renew"
     NEW_SUB = "new"
 
+    # HWID-устройства
+    HWID_DEVICES = "hwid_devices"
+    HWID_DELETE_ALL = "hwid_del_all"
+    HWID_DELETE_ALL_CONFIRM = "hwid_del_all_yes"
+
+    # Веб-кабинет
+    CABINET = "cabinet"
+
 
 class DeviceType(StrEnum):
     ANDROID_PHONE = "Android"
@@ -31,6 +39,7 @@ class VpnAction(StrEnum):
     NEW = "new"
     RENEW = "renew"
     REFERRAL = "referral"
+    MIGRATE = "migrate"
 
 
 class ChoiceType(StrEnum):
