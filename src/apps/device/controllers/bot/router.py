@@ -2,14 +2,17 @@ import re
 
 import structlog
 from aiogram import Bot, F, Router, types
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from dishka.integrations.aiogram import FromDishka
 
 from src.apps.device.application.interactor import DeviceInteractor
+from src.apps.device.application.interfaces.migration_view import MigrationView
 from src.apps.device.domain.commands import (
     ConfirmPayment,
     CreateDeviceFree,
     CreatePendingPayment,
+    MigrateUser,
     RejectPayment,
 )
 from src.apps.device.domain.exceptions import PendingPaymentNotFound
@@ -26,6 +29,7 @@ from src.common.bot.keyboards.keyboards import (
     get_keyboard_approve_payment_or_cancel,
     get_keyboard_confirm_payment,
     get_keyboard_device_count,
+    get_keyboard_migrate,
     get_keyboard_payment_link,
     get_keyboard_skip_email,
     get_keyboard_tariff,
@@ -38,7 +42,7 @@ from src.common.bot.keyboards.user_actions import (
     PaymentStatus,
     VpnAction,
 )
-from src.common.bot.lexicon.text_manager import bot_repl
+from src.common.bot.lexicon.text_manager import TextManager, bot_repl
 from src.common.bot.states import EmailInput
 from src.infrastructure.config import app_config
 from src.infrastructure.yookassa.client import YooKassaClient
@@ -51,6 +55,25 @@ LINK = app_config.payment.payment_url
 
 
 EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+
+async def _send_migration_report(
+    bot: Bot,
+    admin_id: int,
+    total: int,
+    sent: int,
+    errors: list[tuple[int, str]],
+) -> None:
+    error_lines = "\n".join(f"• {tid} — {err}" for tid, err in errors)
+    report = (
+        f"✅ Рассылка завершена.\n"
+        f"📬 Найдено: {total} | ✉️ Отправлено: {sent} | ❌ Ошибок: {len(errors)}\n"
+    )
+    if errors:
+        report += f"\nНе удалось отправить (telegram_id):\n{error_lines}"
+    from src.common.scheduler.tasks import send_long_message  # noqa: PLC0415
+
+    await send_long_message(bot, admin_id, report)
 
 
 async def _show_qr_payment(
@@ -138,7 +161,9 @@ async def _show_payment_link(
 
     message = msg_or_call.message if isinstance(msg_or_call, types.CallbackQuery) else msg_or_call
     await message.answer(
-        bot_repl.get_approve_payment_link(amount=amount, confirmation_url=created.confirmation_url, action=action),
+        bot_repl.get_approve_payment_link(
+            amount=amount, confirmation_url=created.confirmation_url, action=action
+        ),
         reply_markup=get_keyboard_payment_link(),
     )
 
@@ -166,7 +191,8 @@ async def handle_email_input(
         data = await state.get_data()
         await state.clear()
         await _show_payment_link(
-            msg, interactor,
+            msg,
+            interactor,
             action=data["action"],
             device="vpn",
             device_limit=data.get("device_limit", 1),
@@ -193,7 +219,8 @@ async def handle_skip_email(
         data = await state.get_data()
         await state.clear()
         await _show_payment_link(
-            call, interactor,
+            call,
+            interactor,
             action=data["action"],
             device="vpn",
             device_limit=data.get("device_limit", 1),
@@ -329,14 +356,16 @@ async def handle_vpn_flow(
         # Проверяем наличие email у пользователя
         user_email = await user_view.get_email(call.from_user.id)
         if user_email is None:
-            await state.set_data({
-                "action": action,
-                "device_limit": device_limit,
-                "duration": duration,
-                "referral_id": referral_id,
-                "payment": payment,
-                "balance": balance,
-            })
+            await state.set_data(
+                {
+                    "action": action,
+                    "device_limit": device_limit,
+                    "duration": duration,
+                    "referral_id": referral_id,
+                    "payment": payment,
+                    "balance": balance,
+                }
+            )
             await state.set_state(EmailInput.waiting_for_email)
             await call.message.answer(
                 "📧 Укажите вашу электронную почту — она понадобится "
@@ -348,7 +377,8 @@ async def handle_vpn_flow(
 
         if app_config.yookassa.enabled:
             await _show_payment_link(
-                call, interactor,
+                call,
+                interactor,
                 action=action,
                 device="vpn",
                 device_limit=device_limit or 1,
@@ -362,7 +392,14 @@ async def handle_vpn_flow(
             return
 
         await _show_qr_payment(
-            call, action, "vpn", device_limit or 1, duration, referral_id, payment, balance,
+            call,
+            action,
+            "vpn",
+            device_limit or 1,
+            duration,
+            referral_id,
+            payment,
+            balance,
         )
         await call.answer()
         return
@@ -449,8 +486,9 @@ async def handle_vpn_flow(
         return
 
 
-
-@router.callback_query(AdminConfirmCallback.filter(F.action == "confirm"), F.from_user.id == ADMIN_ID)
+@router.callback_query(
+    AdminConfirmCallback.filter(F.action == "confirm"), F.from_user.id == ADMIN_ID
+)
 async def handle_admin_confirm(
     call: types.CallbackQuery,
     callback_data: AdminConfirmCallback,
@@ -458,7 +496,9 @@ async def handle_admin_confirm(
     interactor: FromDishka[DeviceInteractor],
 ) -> None:
     try:
-        result = await interactor.confirm_payment(ConfirmPayment(pending_id=callback_data.pending_id))
+        result = await interactor.confirm_payment(
+            ConfirmPayment(pending_id=callback_data.pending_id)
+        )
     except PendingPaymentNotFound:
         await call.message.edit_text("⚠️ Платёж не найден — возможно, уже обработан")
         await call.answer()
@@ -513,7 +553,9 @@ async def handle_admin_confirm(
     )
 
 
-@router.callback_query(AdminConfirmCallback.filter(F.action == "reject"), F.from_user.id == ADMIN_ID)
+@router.callback_query(
+    AdminConfirmCallback.filter(F.action == "reject"), F.from_user.id == ADMIN_ID
+)
 async def handle_admin_reject(
     call: types.CallbackQuery,
     callback_data: AdminConfirmCallback,
@@ -539,3 +581,52 @@ async def handle_admin_reject(
     await call.message.edit_text("Отклонено")
     await call.answer()
     log.info("payment_rejected", pending_id=callback_data.pending_id)
+
+
+@router.message(Command("migrate_all"))
+async def handle_admin_migrate_all(
+    msg: types.Message,
+    bot: Bot,
+    migration_view: FromDishka[MigrationView],
+) -> None:
+    if msg.from_user is None or msg.from_user.id != ADMIN_ID:
+        return
+
+    users = await migration_view.get_users_for_migration()
+    sent, errors = 0, []
+
+    for user in users:
+        try:
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=TextManager.migration_notification(user.end_date),
+                reply_markup=get_keyboard_migrate(),
+            )
+            sent += 1
+        except Exception as e:  # noqa: BLE001
+            errors.append((user.telegram_id, str(e)))
+            log.warning(
+                "migration_notify_failed",
+                telegram_id=user.telegram_id,
+                error=str(e),
+            )
+
+    await _send_migration_report(bot, ADMIN_ID, total=len(users), sent=sent, errors=errors)
+
+
+@router.callback_query(VpnCallback.filter(F.action == VpnAction.MIGRATE))
+async def handle_migrate_callback(
+    call: types.CallbackQuery,
+    interactor: FromDishka[DeviceInteractor],
+) -> None:
+    if call.from_user is None:
+        return
+    if call.message is None:
+        return
+    result = await interactor.migrate_user_to_remnawave(MigrateUser(telegram_id=call.from_user.id))
+    await call.message.edit_text(
+        f"✅ Готово! Твоя подписка активна до {result.end_date.strftime('%d.%m.%Y')}.\n\n"
+        f"Вот твой новый ключ подписки:"
+    )
+    await call.message.answer(result.subscription_url)
+    await call.answer()

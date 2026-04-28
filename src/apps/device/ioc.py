@@ -6,12 +6,14 @@ from src.apps.device.adapters.gateway import (
     SQLAlchemyPendingPaymentGateway,
     SQLAlchemySubscriptionGateway,
 )
+from src.apps.device.adapters.migration_view import SQLAlchemyMigrationView
 from src.apps.device.adapters.notification_gateway import SQLAlchemyNotificationLogGateway
 from src.apps.device.adapters.notification_view import SQLAlchemyNotificationView
 from src.apps.device.adapters.remnawave_gateway import RemnawaveGatewayImpl
 from src.apps.device.adapters.view import SQLAlchemyDeviceView
 from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.device.application.interfaces.gateway import DeviceGateway
+from src.apps.device.application.interfaces.migration_view import MigrationView
 from src.apps.device.application.interfaces.notification_gateway import NotificationLogGateway
 from src.apps.device.application.interfaces.notification_view import NotificationView
 from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
@@ -46,6 +48,10 @@ class DeviceProvider(Provider):
     @provide
     def get_notification_view(self, session: AsyncSession) -> NotificationView:
         return SQLAlchemyNotificationView(session)
+
+    @provide
+    def get_migration_view(self, session: AsyncSession) -> MigrationView:
+        return SQLAlchemyMigrationView(session)
 
     @provide
     def get_notification_gateway(self, session: AsyncSession) -> NotificationLogGateway:
