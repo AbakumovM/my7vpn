@@ -250,9 +250,10 @@ async def handle_migrate_callback(
         )
         await call.message.edit_text(
             f"✅ Готово! Твоя подписка активна до {result.end_date.strftime('%d.%m.%Y')}.\n\n"
-            f"Вот твой новый ключ подписки:"
+            f"Вот твой новый ключ подписки:\n"
+            f"<code>{result.subscription_url}</code>",
+            reply_markup=get_keyboard_vpn_received(),
         )
-        await call.message.answer(result.subscription_url)
     except Exception:  # noqa: BLE001
         log.exception("migrate_callback_failed", telegram_id=call.from_user.id)
         await call.message.edit_text(
