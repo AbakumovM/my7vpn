@@ -1,17 +1,38 @@
-from datetime import UTC, datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.apps.device.application.interactor import DeviceInteractor, FreeSubscriptionInfo
-from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway
+from src.apps.device.application.interactor import (
+    DeviceInteractor,
+    FreeSubscriptionInfo,
+    MigrateUserResult,
+)
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveUserInfo
-from src.apps.device.domain.commands import ConfirmPayment, CreateDevice, CreateDeviceFree, CreatePendingPayment, DeleteDevice, RenewSubscription
-from src.apps.device.domain.exceptions import DeviceNotFound, PendingPaymentNotFound, SubscriptionNotFound, UserDeviceNotFound
-from src.apps.device.domain.models import Device, PendingPayment, Subscription, UserSubscription
+from src.apps.device.domain.commands import (
+    ConfirmPayment,
+    CreateDevice,
+    CreateDeviceFree,
+    CreatePendingPayment,
+    DeleteDevice,
+    MigrateUser,
+    RenewSubscription,
+)
+from src.apps.device.domain.exceptions import (
+    DeviceNotFound,
+    PendingPaymentNotFound,
+    SubscriptionNotFound,
+    UserDeviceNotFound,
+)
+from src.apps.device.domain.models import (
+    Device,
+    PendingPayment,
+    Subscription,
+    UserPayment,
+    UserSubscription,
+)
 from src.apps.user.domain.exceptions import InsufficientBalance
 from src.apps.user.domain.models import User
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -25,7 +46,7 @@ def _make_device(
     device_name: str = "Android 1000",
     end_date: datetime | None = None,
 ) -> Device:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     sub = Subscription(
         id=1,
         device_id=device_id,
@@ -120,7 +141,7 @@ class TestRenewSubscription:
         mock_gateway: AsyncMock,
         mock_uow: AsyncMock,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         future_end = now + timedelta(days=15)  # подписка ещё активна
         device = _make_device(end_date=future_end)
         mock_gateway.get_by_name.return_value = device
@@ -138,7 +159,7 @@ class TestRenewSubscription:
         mock_gateway: AsyncMock,
         mock_uow: AsyncMock,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expired_end = now - timedelta(days=5)  # подписка истекла
         device = _make_device(end_date=expired_end)
         mock_gateway.get_by_name.return_value = device
@@ -609,7 +630,6 @@ class TestCreateDeviceFree:
         )
         mock_subscription_gateway.save.return_value = saved_sub
 
-        from src.apps.device.domain.models import UserPayment
         saved_payment = UserPayment(
             id=1, user_telegram_id=42, amount=0, duration=5, device_limit=1
         )
@@ -662,7 +682,6 @@ class TestCreateDeviceFree:
         )
         mock_subscription_gateway.save.return_value = saved_sub
 
-        from src.apps.device.domain.models import UserPayment
         mock_subscription_gateway.save_payment.return_value = UserPayment(
             id=2, user_telegram_id=42, amount=0, duration=5, device_limit=1
         )
@@ -728,7 +747,6 @@ class TestConfirmPaymentReferralBonus:
         mock_subscription_gateway.save.return_value = saved_sub
         mock_subscription_gateway.count_payments_for_user.return_value = 0
 
-        from src.apps.device.domain.models import UserPayment
         mock_subscription_gateway.save_payment.return_value = UserPayment(
             id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
         )
@@ -768,7 +786,6 @@ class TestConfirmPaymentReferralBonus:
         mock_subscription_gateway.save.return_value = saved_sub
         mock_subscription_gateway.count_payments_for_user.return_value = 1
 
-        from src.apps.device.domain.models import UserPayment
         mock_subscription_gateway.save_payment.return_value = UserPayment(
             id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
         )
@@ -803,7 +820,6 @@ class TestConfirmPaymentReferralBonus:
         mock_subscription_gateway.save.return_value = saved_sub
         mock_subscription_gateway.count_payments_for_user.return_value = 0
 
-        from src.apps.device.domain.models import UserPayment
         mock_subscription_gateway.save_payment.return_value = UserPayment(
             id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
         )
@@ -844,7 +860,6 @@ class TestConfirmPaymentReferralBonus:
         mock_subscription_gateway.save.return_value = saved_sub
         mock_subscription_gateway.count_payments_for_user.return_value = 0
 
-        from src.apps.device.domain.models import UserPayment
         mock_subscription_gateway.save_payment.return_value = UserPayment(
             id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
         )
@@ -871,9 +886,6 @@ class TestMigrateUserToRemnawave:
         mock_uow: AsyncMock,
     ):
         """Создаёт Remnawave-аккаунт, UserSubscription и UserPayment для пользователя."""
-        from datetime import UTC, datetime, timedelta
-        from unittest.mock import MagicMock
-
         now = datetime.now(UTC)
         end_date = now + timedelta(days=15)
 
@@ -886,8 +898,6 @@ class TestMigrateUserToRemnawave:
             subscription_url="https://sub.url/new",
         )
 
-        from src.apps.device.domain.commands import MigrateUser
-        from src.apps.device.application.interactor import MigrateUserResult
         result = await interactor.migrate_user_to_remnawave(MigrateUser(telegram_id=123))
 
         assert isinstance(result, MigrateUserResult)
@@ -911,8 +921,6 @@ class TestMigrateUserToRemnawave:
         mock_subscription_gateway: AsyncMock,
     ):
         """Если remnawave_uuid уже есть — не создаёт дубль, возвращает текущие данные."""
-        from datetime import UTC, datetime, timedelta
-
         now = datetime.now(UTC)
         end_date = now + timedelta(days=10)
 
@@ -935,11 +943,21 @@ class TestMigrateUserToRemnawave:
         mock_user_gateway.get_by_telegram_id.return_value = user
         mock_subscription_gateway.get_active_by_telegram_id.return_value = active_sub
 
-        from src.apps.device.domain.commands import MigrateUser
-        from src.apps.device.application.interactor import MigrateUserResult
         result = await interactor.migrate_user_to_remnawave(MigrateUser(telegram_id=123))
 
         assert isinstance(result, MigrateUserResult)
         assert result.subscription_url == "https://sub.url/existing"
         assert result.end_date == end_date
         mock_remnawave_gateway.create_user.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_raises_if_user_not_found(
+        self,
+        interactor: DeviceInteractor,
+        mock_user_gateway: AsyncMock,
+    ):
+        """Поднимает UserDeviceNotFound если пользователь не найден."""
+        mock_user_gateway.get_by_telegram_id.return_value = None
+
+        with pytest.raises(UserDeviceNotFound):
+            await interactor.migrate_user_to_remnawave(MigrateUser(telegram_id=999))

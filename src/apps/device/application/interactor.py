@@ -466,13 +466,17 @@ class DeviceInteractor:
 
     async def migrate_user_to_remnawave(self, cmd: MigrateUser) -> MigrateUserResult:
         user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
+        if user is None:
+            raise UserDeviceNotFound(cmd.telegram_id)
 
         # Идемпотентность: уже мигрирован
         if user.remnawave_uuid is not None:
             active_sub = await self._subscription_gateway.get_active_by_telegram_id(cmd.telegram_id)
+            if active_sub is None:
+                raise SubscriptionNotFound(telegram_id=cmd.telegram_id)
             return MigrateUserResult(
-                subscription_url=user.subscription_url,  # type: ignore[arg-type]  # set during initial migration, always str at this point
-                end_date=active_sub.end_date,  # type: ignore[union-attr]  # active sub always exists when remnawave_uuid is set
+                subscription_url=user.subscription_url,  # type: ignore[arg-type]  # set during migration, always str when remnawave_uuid is set
+                end_date=active_sub.end_date,
             )
 
         # Берём end_date из старой подписки
@@ -497,15 +501,15 @@ class DeviceInteractor:
             device_limit=1,
             is_active=True,
         )
+        saved_sub = await self._subscription_gateway.save(subscription)
         payment = UserPayment(
             user_telegram_id=cmd.telegram_id,
+            subscription_id=saved_sub.id,
             amount=0,
             duration=(end_date - now_dt).days,
             device_limit=1,
             payment_method="migration",
         )
-
-        await self._subscription_gateway.save(subscription)
         await self._subscription_gateway.save_payment(payment)
         await self._user_gateway.save(user)
         await self._uow.commit()
