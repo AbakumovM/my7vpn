@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,7 @@ class SQLAlchemyAdminView:
 
     async def get_stats(self) -> AdminStats:
         now = datetime.now(UTC)
-        today = date.today()
+        today = datetime.now(UTC).date()
 
         total = await self._session.scalar(select(func.count(UserORM.id))) or 0
 
