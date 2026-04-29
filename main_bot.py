@@ -18,6 +18,7 @@ from src.apps.device.domain.exceptions import (
     SubscriptionNotFound,
     UserDeviceNotFound,
 )
+from src.apps.user.controllers.bot.admin_router import router as admin_router
 from src.apps.user.controllers.bot.router import router as user_router
 from src.apps.user.domain.exceptions import InsufficientBalance, ReferralNotFound, UserNotFound
 from src.common.bot.keyboards.commands import set_commands
@@ -111,7 +112,7 @@ async def main() -> None:
     container = create_container(app_config)
     setup_dishka(container, router=dp, auto_inject=True)
 
-    dp.include_routers(user_router, device_router, common_router)
+    dp.include_routers(admin_router, user_router, device_router, common_router)
     dp.message.middleware(ResetStateMiddleware())
     dp.update.outer_middleware(LoggingMiddleware())
     dp.update.outer_middleware(ThrottlingMiddleware())
