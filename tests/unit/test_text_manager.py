@@ -17,11 +17,11 @@ def test_expiry_notice_3_days() -> None:
 
 def test_expiry_notice_1_day() -> None:
     text = TextManager.subscription_expiry_notice(days_before=1, end_date=date(2026, 5, 1))
-    assert "Завтра" in text
+    assert "завтра" in text
     assert "01.05.2026" in text
 
 
 def test_expiry_notice_0_days() -> None:
     text = TextManager.subscription_expiry_notice(days_before=0, end_date=date(2026, 5, 1))
-    assert "Сегодня" in text
+    assert "сегодня" in text
     # Дата в тексте не нужна — подписка истекает сегодня
