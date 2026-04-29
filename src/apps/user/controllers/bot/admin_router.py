@@ -1,6 +1,8 @@
 import structlog
 from aiogram import F, Router, types
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from dishka.integrations.aiogram import FromDishka
 
 from src.apps.user.application.interfaces.admin_view import AdminUserInfo, AdminView
@@ -12,6 +14,10 @@ ADMIN_ID = app_config.bot.admin_id
 
 router = Router()
 router.message.filter(F.from_user.id == ADMIN_ID)
+
+
+class AdminUserLookup(StatesGroup):
+    waiting_for_id = State()
 
 
 @router.message(Command("admin_stats"))
@@ -61,14 +67,39 @@ async def handle_admin_churn(
 @router.message(Command("admin_user"))
 async def handle_admin_user(
     msg: types.Message,
+    state: FSMContext,
     admin_view: FromDishka[AdminView],
 ) -> None:
     args = msg.text.split() if msg.text else []
-    if len(args) < 2 or not args[1].lstrip("-").isdigit():
-        await msg.answer("Использование: /admin_user <telegram_id>")
+    if len(args) >= 2 and args[1].lstrip("-").isdigit():
+        # Аргумент передан напрямую: /admin_user 123456789
+        await _show_user_info(msg, int(args[1]), admin_view)
         return
 
-    telegram_id = int(args[1])
+    # Аргумент не передан — спрашиваем
+    await state.set_state(AdminUserLookup.waiting_for_id)
+    await msg.answer("Введите Telegram ID пользователя:")
+
+
+@router.message(AdminUserLookup.waiting_for_id)
+async def handle_admin_user_id_input(
+    msg: types.Message,
+    state: FSMContext,
+    admin_view: FromDishka[AdminView],
+) -> None:
+    await state.clear()
+    text = msg.text.strip() if msg.text else ""
+    if not text.lstrip("-").isdigit():
+        await msg.answer("❌ Некорректный ID. Введите число, например: 123456789")
+        return
+    await _show_user_info(msg, int(text), admin_view)
+
+
+async def _show_user_info(
+    msg: types.Message,
+    telegram_id: int,
+    admin_view: AdminView,
+) -> None:
     info: AdminUserInfo | None = await admin_view.get_user_info(telegram_id)
 
     if info is None:
