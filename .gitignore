@@ -37,6 +37,7 @@ MANIFEST
 
 # Logs and databases
 *.log
+logs/
 *.sqlite3
 *.db
 
@@ -53,3 +54,4 @@ MANIFEST
 
 # macOS
 .DS_Store
+.superpowers/

@@ -1,0 +1,546 @@
+import structlog
+from aiogram import Bot, F, Router, types
+from aiogram.filters import Command
+from dishka.integrations.aiogram import FromDishka
+
+from src.apps.device.application.interactor import DeviceInteractor
+from src.apps.device.application.interfaces.migration_view import MigrationView
+from src.apps.device.domain.commands import (
+    ConfirmPayment,
+    CreateDeviceFree,
+    CreatePendingPayment,
+    MigrateUser,
+    RejectPayment,
+)
+from src.apps.device.domain.exceptions import PendingPaymentNotFound
+from src.apps.user.application.interactor import UserInteractor
+from src.apps.user.application.interfaces.view import UserView
+from src.apps.user.domain.commands import MarkFreeMonthUsed
+from src.common.bot.cbdata import AdminConfirmCallback, VpnCallback
+from src.common.bot.files import get_photo_for_pay
+from src.common.bot.keyboards.keyboards import (
+    get_keyboard_admin_confirm,
+    get_keyboard_approve_payment_or_cancel,
+    get_keyboard_confirm_payment,
+    get_keyboard_device_count,
+    get_keyboard_migrate,
+    get_keyboard_payment_link,
+    get_keyboard_tariff,
+    get_keyboard_vpn_received,
+    return_start,
+)
+from src.common.bot.keyboards.user_actions import (
+    CallbackAction,
+    ChoiceType,
+    PaymentStatus,
+    VpnAction,
+)
+from src.common.bot.lexicon.text_manager import TextManager, bot_repl
+from src.infrastructure.config import app_config
+from src.infrastructure.yookassa.client import YooKassaClient
+
+log = structlog.get_logger(__name__)
+router = Router()
+
+ADMIN_ID = app_config.bot.admin_id
+LINK = app_config.payment.payment_url
+
+
+async def _send_migration_report(
+    bot: Bot,
+    admin_id: int,
+    total: int,
+    sent: int,
+    errors: list[tuple[int, str]],
+) -> None:
+    error_lines = "\n".join(f"• {tid} — {err}" for tid, err in errors)
+    report = (
+        f"✅ Рассылка завершена.\n"
+        f"📬 Найдено: {total} | ✉️ Отправлено: {sent} | ❌ Ошибок: {len(errors)}\n"
+    )
+    if errors:
+        report += f"\nНе удалось отправить (telegram_id):\n{error_lines}"
+    from src.common.scheduler.tasks import send_long_message  # noqa: PLC0415
+
+    await send_long_message(bot, admin_id, report)
+
+
+async def _show_qr_payment(
+    call: types.CallbackQuery,
+    action: str,
+    device: str,
+    device_limit: int,
+    duration: int,
+    referral_id: int | None,
+    payment: int,
+    balance: int,
+) -> None:
+    """Показать QR-код для оплаты (Step 5)."""
+    file_data = await get_photo_for_pay()
+    await call.message.answer_photo(
+        photo=file_data,
+        caption=bot_repl.get_approve_payment(amount=payment, payment_link=LINK),
+        reply_markup=get_keyboard_approve_payment_or_cancel(
+            action=action,
+            device=device,
+            device_limit=device_limit,
+            duration=duration,
+            referral_id=referral_id,
+            payment=payment,
+            balance=balance,
+            choice=ChoiceType.STOP,
+        ),
+    )
+
+
+
+async def _show_payment_link(
+    msg_or_call: types.Message | types.CallbackQuery,
+    interactor: DeviceInteractor,
+    action: str,
+    device: str,
+    device_limit: int,
+    duration: int,
+    amount: int,
+    balance: int,
+    device_name: str | None,
+    user_telegram_id: int,
+) -> None:
+    """Создать pending, получить ссылку ЮKassa и отправить пользователю."""
+    pending = await interactor.create_pending_payment(
+        CreatePendingPayment(
+            user_telegram_id=user_telegram_id,
+            action=action,
+            device_type=device,
+            duration=duration,
+            amount=amount,
+            balance_to_deduct=balance,
+            device_limit=device_limit,
+            device_name=device_name,
+        )
+    )
+    yookassa_client = YooKassaClient(app_config.yookassa)
+    created = await yookassa_client.create_payment(amount=amount, pending_id=pending.id)
+
+    message = msg_or_call.message if isinstance(msg_or_call, types.CallbackQuery) else msg_or_call
+    await message.answer(
+        bot_repl.get_approve_payment_link(
+            amount=amount, confirmation_url=created.confirmation_url, action=action
+        ),
+        reply_markup=get_keyboard_payment_link(),
+    )
+
+
+
+@router.callback_query(VpnCallback.filter(F.action == VpnAction.MIGRATE))
+async def handle_migrate_callback(
+    call: types.CallbackQuery,
+    interactor: FromDishka[DeviceInteractor],
+) -> None:
+    if call.from_user is None:
+        return
+    if call.message is None:
+        return
+    try:
+        result = await interactor.migrate_user_to_remnawave(
+            MigrateUser(telegram_id=call.from_user.id)
+        )
+        await call.message.edit_text(
+            f"✅ Готово! Твоя подписка активна до {result.end_date.strftime('%d.%m.%Y')}.\n\n"
+            f"Вот твой новый ключ подписки:\n"
+            f"<code>{result.subscription_url}</code>",
+            reply_markup=get_keyboard_vpn_received(),
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("migrate_callback_failed", telegram_id=call.from_user.id)
+        await call.message.edit_text(
+            "❌ Произошла ошибка. Попробуй позже или обратись в поддержку."
+        )
+    finally:
+        await call.answer()
+
+
+@router.callback_query(VpnCallback.filter())
+async def handle_vpn_flow(
+    call: types.CallbackQuery,
+    callback_data: VpnCallback,
+    bot: Bot,
+    interactor: FromDishka[DeviceInteractor],
+    user_interactor: FromDishka[UserInteractor],
+    user_view: FromDishka[UserView],
+) -> None:
+    action = callback_data.action
+    device_limit = callback_data.device_limit
+    duration = callback_data.duration
+    referral_id = callback_data.referral_id
+    payment = callback_data.payment
+    balance = callback_data.balance
+    choice = callback_data.choice
+    payment_status = callback_data.payment_status
+
+    # Реферальный бесплатный период — обрабатываем первым, минуя все платёжные шаги
+    if action == VpnAction.REFERRAL:
+        try:
+            await call.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            await call.answer()
+            return
+        await call.answer()
+
+        result_free = await interactor.create_device_free(
+            CreateDeviceFree(
+                telegram_id=call.from_user.id,
+                device_type="vpn",
+                period_days=app_config.payment.free_month,
+                device_limit=1,
+            )
+        )
+        await user_interactor.mark_free_month_used(MarkFreeMonthUsed(telegram_id=call.from_user.id))
+        log.info(
+            "device_created_free",
+            device_type="vpn",
+            referral_id=referral_id,
+        )
+        await bot.send_message(
+            chat_id=ADMIN_ID,
+            text=(
+                f"🎁 Реферальная подписка!\n"
+                f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
+                f"🆔 Пригласил: {referral_id}"
+            ),
+        )
+        await call.message.answer(
+            "✅ Бесплатный период активирован!\n\n"
+            "Ваша ссылка для подключения — скопируйте и вставьте в приложение Happ:\n\n"
+            f"<code>{result_free.subscription_url}</code>",
+            reply_markup=get_keyboard_vpn_received(),
+        )
+        return
+
+    # Шаг 1: выбор количества устройств
+    if device_limit is None:
+        await call.message.edit_text(
+            bot_repl.get_choose_device_count(),
+            reply_markup=get_keyboard_device_count(action=action, referral_id=referral_id),
+        )
+        await call.answer()
+        return
+
+    # Шаг 2: выбор тарифа
+    if duration == 0:
+        await call.message.edit_text(
+            bot_repl.get_choose_tariff(device_limit),
+            reply_markup=get_keyboard_tariff(
+                action=action, device_limit=device_limit, referral_id=referral_id
+            ),
+        )
+        await call.answer()
+        return
+
+    # Шаг 3: подтверждение оплаты
+    if balance is None:
+        user_balance = await user_view.get_balance(call.from_user.id)
+        finally_payment = max(payment - user_balance, 0)
+        balance_to_deduct = min(user_balance, payment)
+        bonus = payment - finally_payment
+        await call.message.edit_text(
+            bot_repl.get_confirm_payment(
+                device_limit=device_limit,
+                duration=duration,
+                price=payment,
+                bonus=bonus,
+                total=finally_payment,
+            ),
+            reply_markup=get_keyboard_confirm_payment(
+                action=action,
+                device_limit=device_limit,
+                duration=duration,
+                balance=balance_to_deduct,
+                payment=finally_payment,
+                referral_id=referral_id,
+            ),
+        )
+        await call.answer()
+        return
+
+    # Шаг 4: отмена
+    if choice == ChoiceType.NO or payment_status == PaymentStatus.FAILED:
+        await call.message.delete()
+        await call.message.answer(
+            text=bot_repl.send_messages_cancel_choice(),
+            reply_markup=return_start(),
+        )
+        await call.answer()
+        return
+
+    # Шаг 5: подтверждение → показ оплаты (или мгновенное списание бонусов)
+    if choice == ChoiceType.YES:
+        await call.message.delete()
+
+        # Бонусов хватает — оплата без YooKassa
+        if payment == 0:
+            await call.answer()
+            pending = await interactor.create_pending_payment(
+                CreatePendingPayment(
+                    user_telegram_id=call.from_user.id,
+                    action="new" if action == CallbackAction.NEW_SUB else "renew",
+                    device_type="vpn",
+                    duration=duration,
+                    amount=0,
+                    balance_to_deduct=balance,
+                    device_limit=device_limit or 1,
+                )
+            )
+            result = await interactor.confirm_payment(ConfirmPayment(pending_id=pending.id))
+            end_str = result.end_date.strftime("%d.%m.%Y")
+            if result.action == "new":
+                await call.message.answer(
+                    "✅ Оплата прошла успешно!\n\n"
+                    "Ваша ссылка для подключения — скопируйте и вставьте в приложение Happ:\n\n"
+                    f"<code>{result.subscription_url}</code>",
+                    reply_markup=get_keyboard_vpn_received(),
+                )
+            else:
+                await call.message.answer(
+                    f"✅ Подписка продлена до {end_str}.",
+                    reply_markup=get_keyboard_vpn_received(),
+                )
+            return
+
+        if app_config.yookassa.enabled:
+            await _show_payment_link(
+                call,
+                interactor,
+                action=action,
+                device="vpn",
+                device_limit=device_limit or 1,
+                duration=duration,
+                amount=payment,
+                balance=balance,
+                device_name=None,
+                user_telegram_id=call.from_user.id,
+            )
+            await call.answer()
+            return
+
+        await _show_qr_payment(
+            call,
+            action,
+            "vpn",
+            device_limit or 1,
+            duration,
+            referral_id,
+            payment,
+            balance,
+        )
+        await call.answer()
+        return
+
+    # Шаг 6a: новая подписка — оплата заявлена, ждём подтверждения админа
+    if action == CallbackAction.NEW_SUB and payment_status == PaymentStatus.SUCCESS:
+        try:
+            await call.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            await call.answer()
+            return
+        await call.answer()
+        pending = await interactor.create_pending_payment(
+            CreatePendingPayment(
+                user_telegram_id=call.from_user.id,
+                action="new",
+                device_type="vpn",
+                duration=duration,
+                amount=payment,
+                balance_to_deduct=balance,
+                device_limit=device_limit or 1,
+            )
+        )
+        await call.message.delete()
+        await call.message.answer("⏳ Ожидайте подтверждения оплаты администратором")
+        await bot.send_message(
+            chat_id=ADMIN_ID,
+            text=(
+                f"💳 Новый платёж!\n"
+                f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
+                f"📱 Устройств: {device_limit}\n"
+                f"📅 Срок: {duration} мес → {payment}₽"
+            ),
+            reply_markup=get_keyboard_admin_confirm(pending.id),
+        )
+        log.info(
+            "pending_payment_created",
+            pending_id=pending.id,
+            user_id=call.from_user.id,
+            device_type="vpn",
+            duration=duration,
+            amount=payment,
+        )
+        return
+
+    # Шаг 6b: продление — ждём подтверждения админа
+    if action == VpnAction.RENEW and payment_status == PaymentStatus.SUCCESS:
+        try:
+            await call.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            await call.answer()
+            return
+        await call.answer()
+        pending = await interactor.create_pending_payment(
+            CreatePendingPayment(
+                user_telegram_id=call.from_user.id,
+                action="renew",
+                device_type="vpn",
+                duration=duration,
+                amount=payment,
+                balance_to_deduct=balance,
+                device_limit=device_limit or 1,
+            )
+        )
+        await call.message.delete()
+        await call.message.answer("⏳ Ожидайте подтверждения оплаты администратором")
+        await bot.send_message(
+            chat_id=ADMIN_ID,
+            text=(
+                f"🔄 Продление подписки!\n"
+                f"👤 @{call.from_user.username} (id: {call.from_user.id})\n"
+                f"📱 Устройств: {device_limit}\n"
+                f"📅 Срок: {duration} мес → {payment}₽"
+            ),
+            reply_markup=get_keyboard_admin_confirm(pending.id),
+        )
+        log.info(
+            "pending_renewal_created",
+            pending_id=pending.id,
+            user_id=call.from_user.id,
+            duration=duration,
+            amount=payment,
+        )
+        return
+
+
+@router.callback_query(
+    AdminConfirmCallback.filter(F.action == "confirm"), F.from_user.id == ADMIN_ID
+)
+async def handle_admin_confirm(
+    call: types.CallbackQuery,
+    callback_data: AdminConfirmCallback,
+    bot: Bot,
+    interactor: FromDishka[DeviceInteractor],
+) -> None:
+    try:
+        result = await interactor.confirm_payment(
+            ConfirmPayment(pending_id=callback_data.pending_id)
+        )
+    except PendingPaymentNotFound:
+        await call.message.edit_text("⚠️ Платёж не найден — возможно, уже обработан")
+        await call.answer()
+        return
+    except Exception:
+        log.exception("admin_confirm_error", pending_id=callback_data.pending_id)
+        await call.message.edit_text("❌ Ошибка при подтверждении. Проверьте логи.")
+        await call.answer()
+        return
+
+    if result.subscription_url:
+        if result.action == "new":
+            await bot.send_message(
+                chat_id=result.user_telegram_id,
+                text=(
+                    "✅ Оплата прошла успешно!\n\n"
+                    "Ваша ссылка для подключения — скопируйте и вставьте в приложение Happ:\n\n"
+                    f"<code>{result.subscription_url}</code>"
+                ),
+                reply_markup=get_keyboard_vpn_received(),
+            )
+        else:
+            end_str = result.end_date.strftime("%d.%m.%Y") if result.end_date else "—"
+            await bot.send_message(
+                chat_id=result.user_telegram_id,
+                text=f"✅ Подписка продлена до {end_str}.",
+                reply_markup=get_keyboard_vpn_received(),
+            )
+    else:
+        end_str = result.end_date.strftime("%d.%m.%Y") if result.end_date else "—"
+        await bot.send_message(
+            chat_id=result.user_telegram_id,
+            text=f"✅ Оплата подтверждена! Подписка активна до {end_str}.",
+            reply_markup=return_start(),
+        )
+
+    await call.message.edit_text(f"✅ Выдано: {result.device_name}")
+    if result.referrer_telegram_id is not None:
+        try:
+            await bot.send_message(
+                chat_id=result.referrer_telegram_id,
+                text="🎉 Ваш друг оформил подписку! Вам начислено 50 руб. на баланс.",
+            )
+        except Exception:
+            log.warning("referral_bonus_notify_failed", referrer_id=result.referrer_telegram_id)
+    await call.answer("Готово!")
+    log.info(
+        "payment_confirmed",
+        pending_id=callback_data.pending_id,
+        device_name=result.device_name,
+        action=result.action,
+    )
+
+
+@router.callback_query(
+    AdminConfirmCallback.filter(F.action == "reject"), F.from_user.id == ADMIN_ID
+)
+async def handle_admin_reject(
+    call: types.CallbackQuery,
+    callback_data: AdminConfirmCallback,
+    bot: Bot,
+    interactor: FromDishka[DeviceInteractor],
+) -> None:
+    try:
+        result = await interactor.reject_payment(RejectPayment(pending_id=callback_data.pending_id))
+    except PendingPaymentNotFound:
+        await call.message.edit_text("⚠️ Платёж не найден — возможно, уже обработан")
+        await call.answer()
+        return
+    except Exception:
+        log.exception("admin_reject_error", pending_id=callback_data.pending_id)
+        await call.message.edit_text("❌ Ошибка при отклонении. Проверьте логи.")
+        await call.answer()
+        return
+
+    await bot.send_message(
+        chat_id=result.user_telegram_id,
+        text="❌ Оплата не подтверждена. Обратитесь к @my7vpnadmin",
+    )
+    await call.message.edit_text("Отклонено")
+    await call.answer()
+    log.info("payment_rejected", pending_id=callback_data.pending_id)
+
+
+@router.message(Command("migrate_all"))
+async def handle_admin_migrate_all(
+    msg: types.Message,
+    bot: Bot,
+    migration_view: FromDishka[MigrationView],
+) -> None:
+    if msg.from_user is None or msg.from_user.id != ADMIN_ID:
+        return
+
+    users = await migration_view.get_users_for_migration()
+    sent, errors = 0, []
+
+    for user in users:
+        try:
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=TextManager.migration_notification(user.end_date),
+                reply_markup=get_keyboard_migrate(),
+            )
+            sent += 1
+        except Exception as e:  # noqa: BLE001
+            errors.append((user.telegram_id, str(e)))
+            log.warning(
+                "migration_notify_failed",
+                telegram_id=user.telegram_id,
+                error=str(e),
+            )
+
+    await _send_migration_report(bot, ADMIN_ID, total=len(users), sent=sent, errors=errors)

@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vpn-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vpn-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bot:
+    build: .
+    container_name: vpn-bot
+    command: python main_bot.py
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vpn-net
+    restart: unless-stopped
+
+  web:
+    build: .
+    container_name: vpn-web
+    command: uvicorn main_web:app --host 0.0.0.0 --port 8000 --no-access-log
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - vpn-net
+    restart: unless-stopped
+
+networks:
+  vpn-net:
+
+volumes:
+  postgres_data:

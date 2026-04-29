@@ -1,0 +1,85 @@
+from dishka import Provider, Scope, provide
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.apps.device.adapters.gateway import (
+    SQLAlchemyDeviceGateway,
+    SQLAlchemyPendingPaymentGateway,
+    SQLAlchemySubscriptionGateway,
+)
+from src.apps.device.adapters.migration_view import SQLAlchemyMigrationView
+from src.apps.device.adapters.notification_gateway import SQLAlchemyNotificationLogGateway
+from src.apps.device.adapters.notification_view import SQLAlchemyNotificationView
+from src.apps.device.adapters.remnawave_gateway import RemnawaveGatewayImpl
+from src.apps.device.adapters.view import SQLAlchemyDeviceView
+from src.apps.device.application.interactor import DeviceInteractor
+from src.apps.device.application.interfaces.gateway import DeviceGateway
+from src.apps.device.application.interfaces.migration_view import MigrationView
+from src.apps.device.application.interfaces.notification_gateway import NotificationLogGateway
+from src.apps.device.application.interfaces.notification_view import NotificationView
+from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
+from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway
+from src.apps.device.application.interfaces.subscription_gateway import SubscriptionGateway
+from src.apps.device.application.interfaces.view import DeviceView
+from src.apps.user.application.interfaces.gateway import UserGateway
+from src.infrastructure.config import AppConfig
+from src.infrastructure.database.uow import SQLAlchemyUoW
+from src.infrastructure.remnawave.client import RemnawaveClient
+
+
+class DeviceProvider(Provider):
+    scope = Scope.REQUEST
+
+    @provide
+    def get_gateway(self, session: AsyncSession) -> DeviceGateway:
+        return SQLAlchemyDeviceGateway(session)
+
+    @provide
+    def get_pending_gateway(self, session: AsyncSession) -> PendingPaymentGateway:
+        return SQLAlchemyPendingPaymentGateway(session)
+
+    @provide
+    def get_subscription_gateway(self, session: AsyncSession) -> SubscriptionGateway:
+        return SQLAlchemySubscriptionGateway(session)
+
+    @provide
+    def get_view(self, session: AsyncSession) -> DeviceView:
+        return SQLAlchemyDeviceView(session)
+
+    @provide
+    def get_notification_view(self, session: AsyncSession) -> NotificationView:
+        return SQLAlchemyNotificationView(session)
+
+    @provide
+    def get_migration_view(self, session: AsyncSession) -> MigrationView:
+        return SQLAlchemyMigrationView(session)
+
+    @provide
+    def get_notification_gateway(self, session: AsyncSession) -> NotificationLogGateway:
+        return SQLAlchemyNotificationLogGateway(session)
+
+    @provide(scope=Scope.APP)
+    def get_remnawave_client(self, config: AppConfig) -> RemnawaveClient:
+        return RemnawaveClient(config.remnawave)
+
+    @provide
+    def get_remnawave_gateway(self, client: RemnawaveClient) -> RemnawaveGateway:
+        return RemnawaveGatewayImpl(client)
+
+    @provide
+    def get_interactor(
+        self,
+        gateway: DeviceGateway,
+        user_gateway: UserGateway,
+        uow: SQLAlchemyUoW,
+        pending_gateway: PendingPaymentGateway,
+        remnawave_gateway: RemnawaveGateway,
+        subscription_gateway: SubscriptionGateway,
+    ) -> DeviceInteractor:
+        return DeviceInteractor(
+            gateway=gateway,
+            user_gateway=user_gateway,
+            uow=uow,
+            pending_gateway=pending_gateway,
+            remnawave_gateway=remnawave_gateway,
+            subscription_gateway=subscription_gateway,
+        )

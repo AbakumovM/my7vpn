@@ -6,7 +6,7 @@ Create Date: 2025-03-13 17:13:37.275651
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 
@@ -14,9 +14,9 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c59626e2a60f"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -59,9 +59,7 @@ def upgrade() -> None:
         sa.Column("currency", sa.String(), nullable=True),
         sa.Column("payment_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("payment_method", sa.String(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["subscription_id"], ["subscriptions.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["subscription_id"], ["subscriptions.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     # ### end Alembic commands ###
