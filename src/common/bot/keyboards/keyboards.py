@@ -47,7 +47,7 @@ def get_keyboard_main_menu(has_subscription: bool) -> InlineKeyboardMarkup:
     ])
     rows.append([
         InlineKeyboardButton(text="🌐 Кабинет", callback_data=CallbackAction.CABINET),
-        InlineKeyboardButton(text="💬 Поддержка", url=f"https://t.me/{app_config.bot.admin_username}"),
+        InlineKeyboardButton(text="💬 Поддержка", url=f"https://t.me/{app_config.bot.admin_username}?start=support"),
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)

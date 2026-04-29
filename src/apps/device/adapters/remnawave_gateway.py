@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveUserInfo
+from src.apps.device.application.interfaces.remnawave_gateway import HwidDevice, RemnawaveUserInfo
 from src.infrastructure.remnawave.client import RemnawaveApiUser, RemnawaveClient
 
 
@@ -57,3 +57,22 @@ class RemnawaveGatewayImpl:
 
     async def get_hwid_devices_count(self, uuid: str) -> int:
         return await self._client.get_hwid_devices_count(uuid)
+
+    async def get_hwid_devices(self, uuid: str) -> list[HwidDevice]:
+        raw_devices = await self._client.get_hwid_devices(uuid)
+        return [
+            HwidDevice(
+                hwid=d.hwid,
+                platform=d.platform,
+                os_version=d.os_version,
+                device_model=d.device_model,
+                created_at=d.created_at,
+            )
+            for d in raw_devices
+        ]
+
+    async def delete_hwid_device(self, uuid: str, hwid: str) -> None:
+        await self._client.delete_hwid_device(uuid, hwid)
+
+    async def delete_all_hwid_devices(self, uuid: str) -> None:
+        await self._client.delete_all_hwid_devices(uuid)

@@ -1,0 +1,61 @@
+<h2>Сравнение: Б vs В</h2>
+<p class="subtitle">Вернулись назад — выбери правильный вариант</p>
+
+<div class="split">
+
+  <div class="mockup">
+    <div class="mockup-header">Вариант Б — список (4 кнопки)</div>
+    <div class="mockup-body">
+      <div style="background:#1e1e2e;border-radius:12px;padding:16px;font-family:sans-serif;color:#cdd6f4;max-width:300px;margin:0 auto">
+        <div style="background:#313244;border-radius:8px;padding:12px;margin-bottom:10px;font-size:13px;line-height:1.6">
+          👋 Привет, Михаил!<br>
+          <span style="color:#a6e3a1">✅ Подписка активна до 15.05.2026</span><br>
+          📱 2 устройства · 💰 Баланс: 50₽
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">📋 Моя подписка и ключ</div>
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">🔄 Продлить подписку</div>
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">📖 Инструкция по подключению</div>
+          <div style="background:#89b4fa;color:#1e1e2e;border-radius:8px;padding:10px;text-align:center;font-size:13px;font-weight:600">💬 Поддержка</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Вариант В — сетка 2×2</div>
+    <div class="mockup-body">
+      <div style="background:#1e1e2e;border-radius:12px;padding:16px;font-family:sans-serif;color:#cdd6f4;max-width:300px;margin:0 auto">
+        <div style="background:#313244;border-radius:8px;padding:12px;margin-bottom:10px;font-size:13px;line-height:1.6">
+          👋 Привет, Михаил!<br>
+          <span style="color:#a6e3a1">✅ Подписка активна до 15.05.2026</span><br>
+          📱 2 устройства · 💰 Баланс: 50₽
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">📋 Подписка</div>
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">🔄 Продлить</div>
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">📖 Инструкция</div>
+          <div style="background:#89b4fa;color:#1e1e2e;border-radius:8px;padding:10px;text-align:center;font-size:13px;font-weight:600">💬 Поддержка</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="options" style="margin-top:20px">
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">Б</div>
+    <div class="content">
+      <h3>Список в столбик</h3>
+      <p>Кнопки широкие, текст не обрезается, привычная навигация. Занимает больше места по высоте.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="v" onclick="toggleSelect(this)">
+    <div class="letter">В</div>
+    <div class="content">
+      <h3>Сетка 2×2</h3>
+      <p>Компактно, всё на экране сразу. Кнопки короче — нужны краткие названия. Популярно у крупных ботов.</p>
+    </div>
+  </div>
+</div>

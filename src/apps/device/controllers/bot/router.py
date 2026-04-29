@@ -1,9 +1,6 @@
-import re
-
 import structlog
 from aiogram import Bot, F, Router, types
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
 from dishka.integrations.aiogram import FromDishka
 
 from src.apps.device.application.interactor import DeviceInteractor
@@ -18,10 +15,7 @@ from src.apps.device.domain.commands import (
 from src.apps.device.domain.exceptions import PendingPaymentNotFound
 from src.apps.user.application.interactor import UserInteractor
 from src.apps.user.application.interfaces.view import UserView
-from src.apps.user.domain.commands import (
-    MarkFreeMonthUsed,
-    SetUserEmail,
-)
+from src.apps.user.domain.commands import MarkFreeMonthUsed
 from src.common.bot.cbdata import AdminConfirmCallback, VpnCallback
 from src.common.bot.files import get_photo_for_pay
 from src.common.bot.keyboards.keyboards import (
@@ -31,7 +25,6 @@ from src.common.bot.keyboards.keyboards import (
     get_keyboard_device_count,
     get_keyboard_migrate,
     get_keyboard_payment_link,
-    get_keyboard_skip_email,
     get_keyboard_tariff,
     get_keyboard_vpn_received,
     return_start,
@@ -43,7 +36,6 @@ from src.common.bot.keyboards.user_actions import (
     VpnAction,
 )
 from src.common.bot.lexicon.text_manager import TextManager, bot_repl
-from src.common.bot.states import EmailInput
 from src.infrastructure.config import app_config
 from src.infrastructure.yookassa.client import YooKassaClient
 
@@ -52,9 +44,6 @@ router = Router()
 
 ADMIN_ID = app_config.bot.admin_id
 LINK = app_config.payment.payment_url
-
-
-EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 
 async def _send_migration_report(
@@ -104,32 +93,6 @@ async def _show_qr_payment(
     )
 
 
-async def _show_qr_from_state(
-    msg_or_call: types.Message | types.CallbackQuery,
-    state: FSMContext,
-) -> None:
-    """Восстановить данные из FSM state и показать QR."""
-    data = await state.get_data()
-    await state.clear()
-
-    message = msg_or_call.message if isinstance(msg_or_call, types.CallbackQuery) else msg_or_call
-
-    file_data = await get_photo_for_pay()
-    await message.answer_photo(
-        photo=file_data,
-        caption=bot_repl.get_approve_payment(amount=data["payment"], payment_link=LINK),
-        reply_markup=get_keyboard_approve_payment_or_cancel(
-            action=data["action"],
-            device="vpn",
-            device_limit=data.get("device_limit", 1),
-            duration=data["duration"],
-            referral_id=data.get("referral_id"),
-            payment=data["payment"],
-            balance=data["balance"],
-            choice=ChoiceType.STOP,
-        ),
-    )
-
 
 async def _show_payment_link(
     msg_or_call: types.Message | types.CallbackQuery,
@@ -168,72 +131,6 @@ async def _show_payment_link(
     )
 
 
-@router.message(EmailInput.waiting_for_email)
-async def handle_email_input(
-    msg: types.Message,
-    state: FSMContext,
-    user_interactor: FromDishka[UserInteractor],
-    interactor: FromDishka[DeviceInteractor],
-) -> None:
-    """Обработка ввода email пользователем."""
-    email = msg.text.strip().lower() if msg.text else ""
-    if not EMAIL_RE.match(email):
-        await msg.answer(
-            "Неверный формат email. Попробуйте ещё раз или нажмите «Пропустить».",
-            reply_markup=get_keyboard_skip_email(),
-        )
-        return
-
-    await user_interactor.set_email(SetUserEmail(telegram_id=msg.from_user.id, email=email))
-    await msg.answer(f"Email {email} сохранён.")
-
-    if app_config.yookassa.enabled:
-        data = await state.get_data()
-        await state.clear()
-        await _show_payment_link(
-            msg,
-            interactor,
-            action=data["action"],
-            device="vpn",
-            device_limit=data.get("device_limit", 1),
-            duration=data["duration"],
-            amount=data["payment"],
-            balance=data["balance"],
-            device_name=None,
-            user_telegram_id=msg.from_user.id,
-        )
-    else:
-        await _show_qr_from_state(msg, state)
-
-
-@router.callback_query(F.data == "skip_email", EmailInput.waiting_for_email)
-async def handle_skip_email(
-    call: types.CallbackQuery,
-    state: FSMContext,
-    interactor: FromDishka[DeviceInteractor],
-) -> None:
-    """Пользователь пропустил ввод email."""
-    await call.message.edit_text("Хорошо, вы можете указать email позже.")
-
-    if app_config.yookassa.enabled:
-        data = await state.get_data()
-        await state.clear()
-        await _show_payment_link(
-            call,
-            interactor,
-            action=data["action"],
-            device="vpn",
-            device_limit=data.get("device_limit", 1),
-            duration=data["duration"],
-            amount=data["payment"],
-            balance=data["balance"],
-            device_name=None,
-            user_telegram_id=call.from_user.id,
-        )
-    else:
-        await _show_qr_from_state(call, state)
-    await call.answer()
-
 
 @router.callback_query(VpnCallback.filter(F.action == VpnAction.MIGRATE))
 async def handle_migrate_callback(
@@ -268,7 +165,6 @@ async def handle_vpn_flow(
     call: types.CallbackQuery,
     callback_data: VpnCallback,
     bot: Bot,
-    state: FSMContext,
     interactor: FromDishka[DeviceInteractor],
     user_interactor: FromDishka[UserInteractor],
     user_view: FromDishka[UserView],
@@ -377,30 +273,38 @@ async def handle_vpn_flow(
         await call.answer()
         return
 
-    # Шаг 5: подтверждение → проверка email → показ оплаты
+    # Шаг 5: подтверждение → показ оплаты (или мгновенное списание бонусов)
     if choice == ChoiceType.YES:
         await call.message.delete()
 
-        # Проверяем наличие email у пользователя
-        user_email = await user_view.get_email(call.from_user.id)
-        if user_email is None:
-            await state.set_data(
-                {
-                    "action": action,
-                    "device_limit": device_limit,
-                    "duration": duration,
-                    "referral_id": referral_id,
-                    "payment": payment,
-                    "balance": balance,
-                }
-            )
-            await state.set_state(EmailInput.waiting_for_email)
-            await call.message.answer(
-                "📧 Укажите вашу электронную почту — она понадобится "
-                "для входа на сайт и получения чеков.",
-                reply_markup=get_keyboard_skip_email(),
-            )
+        # Бонусов хватает — оплата без YooKassa
+        if payment == 0:
             await call.answer()
+            pending = await interactor.create_pending_payment(
+                CreatePendingPayment(
+                    user_telegram_id=call.from_user.id,
+                    action="new" if action == CallbackAction.NEW_SUB else "renew",
+                    device_type="vpn",
+                    duration=duration,
+                    amount=0,
+                    balance_to_deduct=balance,
+                    device_limit=device_limit or 1,
+                )
+            )
+            result = await interactor.confirm_payment(ConfirmPayment(pending_id=pending.id))
+            end_str = result.end_date.strftime("%d.%m.%Y")
+            if result.action == "new":
+                await call.message.answer(
+                    "✅ Оплата прошла успешно!\n\n"
+                    "Ваша ссылка для подключения — скопируйте и вставьте в приложение Happ:\n\n"
+                    f"<code>{result.subscription_url}</code>",
+                    reply_markup=get_keyboard_vpn_received(),
+                )
+            else:
+                await call.message.answer(
+                    f"✅ Подписка продлена до {end_str}.",
+                    reply_markup=get_keyboard_vpn_received(),
+                )
             return
 
         if app_config.yookassa.enabled:

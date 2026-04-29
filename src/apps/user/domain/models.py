@@ -12,4 +12,5 @@ class User:
     referred_by: int | None = None
     remnawave_uuid: str | None = None
     subscription_url: str | None = None
+    web_key: str | None = None
     created_at: date = field(default_factory=date.today)

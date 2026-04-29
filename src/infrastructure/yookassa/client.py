@@ -1,7 +1,8 @@
 import uuid
+from dataclasses import dataclass
+
 import httpx
 import structlog
-from dataclasses import dataclass
 
 from src.infrastructure.config import YooKassaSettings
 
@@ -33,11 +34,11 @@ class YooKassaClient:
             resp = await client.post(
                 f"{YOOKASSA_API}/payments",
                 auth=self._auth,
-                headers={"Idempotency-Key": str(uuid.uuid4())},
+                headers={"Idempotence-Key": str(uuid.uuid4())},
                 json={
                     "amount": {"value": f"{amount}.00", "currency": "RUB"},
                     "confirmation": {"type": "redirect", "return_url": self._return_url},
-                    "description": f"VPN подписка #{pending_id}",
+                    "description": f"Оплата подписки на сервис ZEVSgate #{pending_id}",
                     "metadata": {"pending_id": str(pending_id)},
                     "capture": True,
                 },

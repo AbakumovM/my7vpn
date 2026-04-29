@@ -4,6 +4,15 @@ from typing import Protocol
 
 
 @dataclass(frozen=True)
+class HwidDevice:
+    hwid: str
+    platform: str | None
+    os_version: str | None
+    device_model: str | None
+    created_at: datetime
+
+
+@dataclass(frozen=True)
 class RemnawaveUserInfo:
     uuid: str
     username: str
@@ -37,3 +46,9 @@ class RemnawaveGateway(Protocol):
     async def disable_user(self, uuid: str) -> None: ...
 
     async def get_hwid_devices_count(self, uuid: str) -> int: ...
+
+    async def get_hwid_devices(self, uuid: str) -> list[HwidDevice]: ...
+
+    async def delete_hwid_device(self, uuid: str, hwid: str) -> None: ...
+
+    async def delete_all_hwid_devices(self, uuid: str) -> None: ...

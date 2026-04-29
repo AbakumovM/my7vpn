@@ -33,9 +33,17 @@ def _renew_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+_DAYS_LABELS: dict[int, str] = {
+    7: "за 7 дней",
+    3: "за 3 дня",
+    1: "завтра",
+    0: "сегодня",
+}
+
+
 async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None:
     log.info("notification_job_started")
-    sent = 0
+    sent_by_days: dict[int, int] = {d: 0 for d in NOTIFICATION_DAYS}
     skipped = 0
     errors = 0
 
@@ -69,7 +77,7 @@ async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None
                     days_before=sub.days_before,
                     end_date=str(sub.end_date),
                 )
-                sent += 1
+                sent_by_days[sub.days_before] += 1
             except Exception:
                 log.exception(
                     "notification_send_failed",
@@ -78,14 +86,21 @@ async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None
                 )
                 errors += 1
 
-    log.info("notification_job_done", sent=sent, skipped=skipped, errors=errors)
-    await send_admin_report(bot, sent, skipped, errors)
+    total_sent = sum(sent_by_days.values())
+    log.info("notification_job_done", sent=total_sent, skipped=skipped, errors=errors)
+    await send_admin_report(bot, sent_by_days, skipped, errors)
 
 
-async def send_admin_report(bot: Bot, sent: int, skipped: int, errors: int) -> None:
+async def send_admin_report(bot: Bot, sent_by_days: dict[int, int], skipped: int, errors: int) -> None:
+    total = sum(sent_by_days.values())
+    breakdown = "\n".join(
+        f"  • {_DAYS_LABELS.get(d, f'{d} дн.')}: {sent_by_days[d]}"
+        for d in NOTIFICATION_DAYS
+    )
     report = (
         f"🔔 Уведомления {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}\n"
-        f"📬 Отправлено: {sent}\n"
+        f"📬 Отправлено: {total}\n"
+        f"{breakdown}\n"
         f"⏭ Пропущено (уже отправлено): {skipped}\n"
         f"❌ Ошибок: {errors}"
     )

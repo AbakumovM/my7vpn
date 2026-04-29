@@ -1,0 +1,69 @@
+<h2>Вариант Б — уточнённый</h2>
+<p class="subtitle">Заменили «☠️ Не работает VPN» на кнопку поддержки. Два варианта формулировки — выбери.</p>
+
+<div class="split">
+
+  <div class="mockup">
+    <div class="mockup-header">Вариант Б1 — «Поддержка»</div>
+    <div class="mockup-body">
+      <div style="background:#1e1e2e;border-radius:12px;padding:16px;font-family:sans-serif;color:#cdd6f4;max-width:300px;margin:0 auto">
+        <div style="background:#313244;border-radius:8px;padding:12px;margin-bottom:10px;font-size:13px;line-height:1.6">
+          👋 Привет, Михаил!<br>
+          <span style="color:#a6e3a1">✅ Подписка активна до 15.05.2026</span><br>
+          📱 2 устройства · 💰 Баланс: 50₽
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">📋 Моя подписка и ключ</div>
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">🔄 Продлить подписку</div>
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">📖 Инструкция по подключению</div>
+          <div style="background:#89b4fa;color:#1e1e2e;border-radius:8px;padding:10px;text-align:center;font-size:13px;font-weight:600">💬 Поддержка → @my7vpnadmin</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Вариант Б2 — «Написать нам»</div>
+    <div class="mockup-body">
+      <div style="background:#1e1e2e;border-radius:12px;padding:16px;font-family:sans-serif;color:#cdd6f4;max-width:300px;margin:0 auto">
+        <div style="background:#313244;border-radius:8px;padding:12px;margin-bottom:10px;font-size:13px;line-height:1.6">
+          👋 Привет, Михаил!<br>
+          <span style="color:#a6e3a1">✅ Подписка активна до 15.05.2026</span><br>
+          📱 2 устройства · 💰 Баланс: 50₽
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">📋 Моя подписка и ключ</div>
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">🔄 Продлить подписку</div>
+          <div style="background:#45475a;border-radius:8px;padding:10px;text-align:center;font-size:13px">📖 Инструкция по подключению</div>
+          <div style="background:#89b4fa;color:#1e1e2e;border-radius:8px;padding:10px;text-align:center;font-size:13px;font-weight:600">✍️ Написать нам</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>Как это работает технически</h3>
+  <p style="color:#cdd6f4;font-size:13px;line-height:1.7">
+    Кнопка — URL-кнопка Telegram (<code>url="https://t.me/my7vpnadmin"</code>). При нажатии сразу открывается чат с поддержкой. Никакого хендлера в боте не нужно — это нативный Telegram-паттерн.<br><br>
+    Кнопку «📖 Инструкция» я добавил вместо отдельного раздела помощи — она открывает тот же экран с настройками happ по платформам. Заменяет текущую «Помощь 🆘».
+  </p>
+</div>
+
+<div class="options" style="margin-top:16px">
+  <div class="option" data-choice="b1" onclick="toggleSelect(this)">
+    <div class="letter">Б1</div>
+    <div class="content">
+      <h3>💬 Поддержка → @my7vpnadmin</h3>
+      <p>Явно показывает что откроется чат с конкретным человеком</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b2" onclick="toggleSelect(this)">
+    <div class="letter">Б2</div>
+    <div class="content">
+      <h3>✍️ Написать нам</h3>
+      <p>Нейтрально, без упоминания ника — если захочешь сменить админа</p>
+    </div>
+  </div>
+</div>

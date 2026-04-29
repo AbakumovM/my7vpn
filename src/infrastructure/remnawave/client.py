@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import structlog
@@ -14,6 +14,15 @@ class RemnawaveAPIError(Exception):
         self.status_code = status_code
         self.detail = detail
         super().__init__(f"Remnawave API error {status_code}: {detail}")
+
+
+@dataclass(frozen=True)
+class RemnawaveHwidDevice:
+    hwid: str
+    platform: str | None
+    os_version: str | None
+    device_model: str | None
+    created_at: datetime
 
 
 @dataclass(frozen=True)
@@ -54,13 +63,15 @@ class RemnawaveClient:
         expire_at: datetime,
         device_limit: int,
     ) -> RemnawaveApiUser:
-        payload = {
+        payload: dict[str, object] = {
             "username": f"tg{telegram_id}",
-            "expireAt": expire_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "expireAt": expire_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             "hwidDeviceLimit": device_limit,
             "telegramId": telegram_id,
             "trafficLimitBytes": 0,
         }
+        if self._settings.default_squad_uuid:
+            payload["activeInternalSquads"] = [self._settings.default_squad_uuid]
         async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
             resp = await http.post("/api/users", json=payload, headers=self._headers())
             if resp.status_code >= 400:
@@ -77,7 +88,7 @@ class RemnawaveClient:
     ) -> RemnawaveApiUser:
         payload: dict[str, object] = {"uuid": uuid}
         if expire_at is not None:
-            payload["expireAt"] = expire_at.astimezone(timezone.utc).strftime(
+            payload["expireAt"] = expire_at.astimezone(UTC).strftime(
                 "%Y-%m-%dT%H:%M:%S.000Z"
             )
         if device_limit is not None:
@@ -134,3 +145,45 @@ class RemnawaveClient:
             if resp.status_code >= 400:
                 raise RemnawaveAPIError(resp.status_code, resp.text)
         return resp.json()["response"]["total"]
+
+    async def get_hwid_devices(self, uuid: str) -> list[RemnawaveHwidDevice]:
+        """Возвращает список HWID-устройств с деталями."""
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.get(f"/api/hwid/devices/{uuid}", headers=self._headers())
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+        devices = resp.json()["response"]["devices"]
+        return [
+            RemnawaveHwidDevice(
+                hwid=d["hwid"],
+                platform=d.get("platform"),
+                os_version=d.get("osVersion"),
+                device_model=d.get("deviceModel"),
+                created_at=datetime.fromisoformat(d["createdAt"].replace("Z", "+00:00")),
+            )
+            for d in devices
+        ]
+
+    async def delete_hwid_device(self, uuid: str, hwid: str) -> None:
+        """Удаляет одно HWID-устройство пользователя."""
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.post(
+                "/api/hwid/devices/delete",
+                json={"userUuid": uuid, "hwid": hwid},
+                headers=self._headers(),
+            )
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+        log.info("remnawave_hwid_device_deleted", uuid=uuid, hwid=hwid)
+
+    async def delete_all_hwid_devices(self, uuid: str) -> None:
+        """Удаляет все HWID-устройства пользователя."""
+        async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
+            resp = await http.post(
+                "/api/hwid/devices/delete-all",
+                json={"userUuid": uuid},
+                headers=self._headers(),
+            )
+            if resp.status_code >= 400:
+                raise RemnawaveAPIError(resp.status_code, resp.text)
+        log.info("remnawave_all_hwid_devices_deleted", uuid=uuid)

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,10 +24,19 @@ class PaymentSettings(BaseModel):
 class AuthSettings(BaseModel):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def jwt_secret_must_be_set(cls, v: str) -> str:
+        if v == "change-me-in-production":
+            raise ValueError(
+                "AUTH__JWT_SECRET must be set to a secure random string in .env"
+            )
+        return v
     jwt_expire_minutes: int = 1440  # 24 часа
     otp_expire_minutes: int = 5
     bot_token_expire_minutes: int = 10
-    site_url: str = "http://localhost:8000"
+    site_url: str = "https://example.com"
 
 
 class SmtpSettings(BaseModel):
@@ -41,6 +50,7 @@ class SmtpSettings(BaseModel):
 class RemnawaveSettings(BaseModel):
     url: str = ""
     token: str = ""
+    default_squad_uuid: str = ""
 
 
 class LoggingSettings(BaseModel):

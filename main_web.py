@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request, Response
 from ioc import create_container
 from src.apps.auth.controllers.http.router import router as auth_router
 from src.apps.device.controllers.http.router import router as device_router
+from src.apps.device.controllers.http.cabinet_router import router as cabinet_router
 from src.apps.device.controllers.http.yookassa_router import router as yookassa_router
 from src.apps.user.controllers.http.router import router as user_router
 from src.infrastructure.config import app_config
@@ -34,7 +35,7 @@ async def lifespan(app: FastAPI):
     await bot.session.close()
 
 
-app = FastAPI(title="VPN Bot API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="VPN Bot API", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 container = create_container(app_config)
 setup_dishka(container, app=app)
@@ -43,6 +44,7 @@ app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(device_router)
 app.include_router(yookassa_router)
+app.include_router(cabinet_router)
 
 
 @app.middleware("http")

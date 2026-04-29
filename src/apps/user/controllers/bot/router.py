@@ -68,7 +68,7 @@ async def handle_start(
         existing_user_id = await user_view.get_user_id(msg.from_user.id)
         if existing_user_id is not None:
             await msg.answer(
-                "Вы уже зарегистрированы. Используйте /start для входа в меню.",
+                "ℹ️ Эта реферальная ссылка предназначена для новых пользователей.",
                 reply_markup=return_start(),
             )
             return
@@ -112,6 +112,7 @@ async def handle_start_callback(
     device_view: FromDishka[DeviceView],
     remnawave_gateway: FromDishka[RemnawaveGateway],
 ) -> None:
+    await call.answer()
     try:
         user = await interactor.get_or_create(GetOrCreateUser(telegram_id=call.from_user.id))
         sub = await device_view.get_subscription_info(call.from_user.id)
@@ -236,20 +237,12 @@ async def handle_web_login(
 @router.callback_query(F.data == CallbackAction.CABINET)
 async def handle_cabinet(
     call: types.CallbackQuery,
-    interactor: FromDishka[UserInteractor],
 ) -> None:
-    try:
-        web_key = await interactor.get_or_create_web_key(call.from_user.id)
-    except Exception:
-        await call.answer("Сначала запустите /start", show_alert=True)
-        return
-    link = f"{app_config.auth.site_url}/cabinet/{web_key}"
-    await call.message.answer(
-        f"🌐 <b>Личный кабинет</b>\n\n"
-        f"Ваша постоянная ссылка:\n<code>{link}</code>\n\n"
-        f"Добавьте её в закладки — она всегда работает.",
-    )
     await call.answer()
+    await call.message.answer(
+        "🚧 <b>Личный кабинет</b>\n\n"
+        "Функционал находится в разработке. Скоро будет доступен!"
+    )
 
 
 async def _get_hwid_device_dicts(

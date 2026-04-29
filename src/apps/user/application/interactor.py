@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 from dataclasses import dataclass
 
 from src.apps.user.application.interfaces.gateway import UserGateway
@@ -69,6 +70,7 @@ class UserInteractor:
         await self._uow.commit()
         return UserInfo(
             telegram_id=user.telegram_id,
+            email=None,
             balance=user.balance,
             free_months=user.free_months,
             referral_code=user.referral_code,
@@ -99,6 +101,7 @@ class UserInteractor:
         await self._uow.commit()
         return UserInfo(
             telegram_id=user.telegram_id,
+            email=user.email,
             balance=user.balance,
             free_months=user.free_months,
             referral_code=user.referral_code,
@@ -116,6 +119,7 @@ class UserInteractor:
         await self._uow.commit()
         return UserInfo(
             telegram_id=user.telegram_id,
+            email=user.email,
             balance=user.balance,
             free_months=user.free_months,
             referral_code=user.referral_code,
@@ -152,3 +156,13 @@ class UserInteractor:
             free_months=user.free_months,
             referral_code=user.referral_code,
         )
+
+    async def get_or_create_web_key(self, telegram_id: int) -> str:
+        user = await self._gateway.get_by_telegram_id(telegram_id)
+        if user is None:
+            raise UserNotFound(telegram_id)
+        if user.web_key is None:
+            user.web_key = str(uuid.uuid4())
+            await self._gateway.save(user)
+            await self._uow.commit()
+        return user.web_key

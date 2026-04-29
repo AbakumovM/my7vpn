@@ -1,6 +1,16 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from src.infrastructure.database.base import Base

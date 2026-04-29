@@ -25,6 +25,13 @@ class SQLAlchemyUserGateway:
             return None
         return self._to_domain(row)
 
+    async def get_by_web_key(self, web_key: str) -> User | None:
+        result = await self._session.execute(
+            select(UserORM).where(UserORM.web_key == web_key)
+        )
+        row = result.scalar_one_or_none()
+        return self._to_domain(row) if row else None
+
     async def get_by_referral_code(self, referral_code: str) -> User | None:
         result = await self._session.execute(
             select(UserORM).where(UserORM.referral_code == referral_code)
@@ -55,6 +62,7 @@ class SQLAlchemyUserGateway:
         row.referred_by = user.referred_by
         row.remnawave_uuid = user.remnawave_uuid
         row.subscription_url = user.subscription_url
+        row.web_key = user.web_key
         await self._session.flush()
 
     @staticmethod
@@ -68,5 +76,6 @@ class SQLAlchemyUserGateway:
             referred_by=row.referred_by,
             remnawave_uuid=row.remnawave_uuid,
             subscription_url=row.subscription_url,
+            web_key=row.web_key,
             created_at=row.created_at,
         )
