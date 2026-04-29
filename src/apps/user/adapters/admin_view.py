@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.device.adapters.orm import DeviceORM, SubscriptionORM, UserSubscriptionORM
@@ -87,7 +87,7 @@ class SQLAlchemyAdminView:
 
         def count_churned(days: int):
             return (
-                select(func.count(func.distinct(UserSubscriptionORM.user_id)))
+                select(func.count(distinct(UserSubscriptionORM.user_id)))
                 .where(
                     UserSubscriptionORM.end_date < now,
                     UserSubscriptionORM.end_date >= now - timedelta(days=days),
@@ -99,7 +99,7 @@ class SQLAlchemyAdminView:
         churned_30 = await self._session.scalar(count_churned(30)) or 0
 
         total_expired_30 = await self._session.scalar(
-            select(func.count(func.distinct(UserSubscriptionORM.user_id))).where(
+            select(func.count(distinct(UserSubscriptionORM.user_id))).where(
                 UserSubscriptionORM.end_date < now,
                 UserSubscriptionORM.end_date >= now - timedelta(days=30),
             )
