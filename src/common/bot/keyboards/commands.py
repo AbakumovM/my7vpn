@@ -7,6 +7,10 @@ from src.infrastructure.config import app_config
 _ADMIN_COMMANDS: dict[str, str] = {
     **LEXICON_COMMANDS_RU,
     "migrate_all": "🔄 Миграция пользователей на Remnawave",
+    "admin_stats": "📊 Статистика подписчиков",
+    "admin_expiring": "⏳ Истекающие подписки",
+    "admin_churn": "📉 Отток подписчиков",
+    "admin_user": "👤 Инфо по пользователю",
 }
 
 
