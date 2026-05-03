@@ -68,6 +68,9 @@ class ConfirmPaymentResult:
     action: str  # "new" | "renew"
     subscription_url: str | None
     end_date: datetime
+    amount: int = 0
+    duration: int = 0
+    device_limit: int = 1
     referrer_telegram_id: int | None = None
 
 
@@ -385,6 +388,9 @@ class DeviceInteractor:
             action=pending.action,
             subscription_url=user.subscription_url,
             end_date=end_date,
+            amount=pending.amount,
+            duration=pending.duration,
+            device_limit=pending.device_limit,
             referrer_telegram_id=referrer_telegram_id,
         )
 

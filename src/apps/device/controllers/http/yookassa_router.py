@@ -61,7 +61,7 @@ async def yookassa_webhook(
     # Проверка суммы
     try:
         paid_str = body.object.get("amount", {}).get("value", "0")
-        paid = float(paid_str)
+        float(paid_str)
     except (ValueError, TypeError):
         log.warning("yookassa_invalid_amount", payment_id=payment_id)
         return JSONResponse(content={"status": "invalid_amount"})
@@ -92,12 +92,16 @@ async def yookassa_webhook(
     # Уведомляем админа (информационно, без кнопок)
     end_str = result.end_date.strftime("%d.%m.%Y")
     action_label = "Новая подписка" if result.action == "new" else "Продление"
+    details = (
+        f"📱 Устройств: {result.device_limit} | 📅 {result.duration} мес | 💳 {result.amount}₽"
+    )
     await bot.send_message(
         chat_id=app_config.bot.admin_id,
         text=(
             f"✅ ЮKassa автоплатёж\n"
-            f"👤 {result.user_telegram_id} | 📱 {result.device_name}\n"
+            f"👤 {result.user_telegram_id}\n"
             f"{action_label} до {end_str}\n"
+            f"{details}\n"
             f"payment_id: {payment_id}"
         ),
     )
