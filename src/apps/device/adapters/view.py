@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,6 +71,7 @@ class SQLAlchemyDeviceView:
             .join(UserORM, UserSubscriptionORM.user_id == UserORM.id)
             .where(UserORM.telegram_id == telegram_id)
             .where(UserSubscriptionORM.is_active.is_(True))
+            .where(UserSubscriptionORM.end_date > datetime.now(UTC))
             .order_by(UserSubscriptionORM.end_date.desc())
             .limit(1)
         )
@@ -106,6 +109,7 @@ class SQLAlchemyDeviceView:
             .join(UserORM, DeviceORM.user_id == UserORM.id)
             .where(UserORM.telegram_id == telegram_id)
             .where(SubscriptionORM.is_active.is_(True))
+            .where(SubscriptionORM.end_date > datetime.now(UTC))
             .order_by(SubscriptionORM.end_date.desc())
             .limit(1)
         )
