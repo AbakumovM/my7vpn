@@ -3,7 +3,9 @@ from datetime import date, datetime
 
 class TextManager:
     @staticmethod
-    def get_main_menu_active(user_name: str, end_date: str, used: int, limit: int, balance: int) -> str:
+    def get_main_menu_active(
+        user_name: str, end_date: str, used: int, limit: int, balance: int, free_days: int = 5
+    ) -> str:
         return (
             f"👋 Привет, {user_name}!\n\n"
             f"Твоя защита активна.\n\n"
@@ -12,7 +14,7 @@ class TextManager:
             f"💰 Баланс: {balance}₽\n\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"🎁 Пригласи друга — получи 50₽ на баланс.\n"
-            f"Друг получит 5 дней бесплатно.\n\n"
+            f"Друг получит {free_days} дней бесплатно.\n\n"
             f"💻 Личный кабинет в разработке — скоро будет."
         )
 
@@ -143,10 +145,12 @@ class TextManager:
         return text
 
     @staticmethod
-    def get_friends_screen(invited_count: int, total_earned: int, balance: int, referral_link: str) -> str:
+    def get_friends_screen(
+        invited_count: int, total_earned: int, balance: int, referral_link: str, free_days: int = 5
+    ) -> str:
         return (
             f"👫 <b>Пригласи друга</b>\n\n"
-            f"Ты получаешь <b>50₽</b>, друг — <b>5 дней VPN бесплатно</b>\n\n"
+            f"Ты получаешь <b>50₽</b>, друг — <b>{free_days} дней VPN бесплатно</b>\n\n"
             f"📊 <b>Твоя статистика:</b>\n"
             f"Приглашено: <b>{invited_count}</b>\n"
             f"🎁 Ожидаемый бонус: <b>{total_earned}₽</b>\n"

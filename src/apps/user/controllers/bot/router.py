@@ -93,7 +93,8 @@ async def handle_start(
         used = await _get_hwid_used(remnawave_uuid, remnawave_gateway)
         await msg.answer(
             bot_repl.get_main_menu_active(
-                msg.from_user.full_name, end_str, used, sub.device_limit, user.balance
+                msg.from_user.full_name, end_str, used, sub.device_limit, user.balance,
+                free_days=app_config.payment.free_month,
             ),
             reply_markup=get_keyboard_main_menu(has_subscription=True),
         )
@@ -123,7 +124,8 @@ async def handle_start_callback(
             used = await _get_hwid_used(remnawave_uuid, remnawave_gateway)
             await call.message.answer(
                 bot_repl.get_main_menu_active(
-                    call.from_user.full_name, end_str, used, sub.device_limit, user.balance
+                    call.from_user.full_name, end_str, used, sub.device_limit, user.balance,
+                    free_days=app_config.payment.free_month,
                 ),
                 reply_markup=get_keyboard_main_menu(has_subscription=True),
             )
@@ -191,7 +193,10 @@ async def handle_friends(
     bot_name = app_config.bot.bot_name
     referral_link = f"https://t.me/{bot_name}?start={result.referral_code}"
     await call.message.answer(
-        bot_repl.get_friends_screen(stats.invited_count, stats.total_earned, stats.balance, referral_link),
+        bot_repl.get_friends_screen(
+            stats.invited_count, stats.total_earned, stats.balance, referral_link,
+            free_days=app_config.payment.free_month
+        ),
         reply_markup=get_keyboard_friends(result.referral_code),
     )
     await call.answer()
@@ -209,7 +214,10 @@ async def handle_invite(
     bot_name = app_config.bot.bot_name
     referral_link = f"https://t.me/{bot_name}?start={result.referral_code}"
     await msg.answer(
-        bot_repl.get_friends_screen(stats.invited_count, stats.total_earned, stats.balance, referral_link),
+        bot_repl.get_friends_screen(
+            stats.invited_count, stats.total_earned, stats.balance, referral_link,
+            free_days=app_config.payment.free_month
+        ),
         reply_markup=get_keyboard_friends(result.referral_code),
     )
 
