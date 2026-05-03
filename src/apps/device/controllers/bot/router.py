@@ -209,6 +209,14 @@ async def handle_vpn_flow(
                 f"🆔 Пригласил: {referral_id}"
             ),
         )
+        if referral_id is not None:
+            try:
+                await bot.send_message(
+                    chat_id=referral_id,
+                    text="🎉 Твой друг активировал бесплатный период по твоей реферальной ссылке!",
+                )
+            except Exception:
+                log.warning("referral_notify_referrer_failed", referral_id=referral_id)
         await call.message.answer(
             "✅ Бесплатный период активирован!\n\n"
             "Ваша ссылка для подключения — скопируйте и вставьте в приложение Happ:\n\n"
