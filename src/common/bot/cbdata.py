@@ -1,8 +1,6 @@
-from typing import Literal
-
 from aiogram.filters.callback_data import CallbackData
 
-from src.common.bot.keyboards.user_actions import ChoiceType, PaymentStatus, VpnAction
+from src.common.bot.keyboards.user_actions import ChoiceType, VpnAction
 
 
 class VpnCallback(CallbackData, prefix="vpn"):
@@ -15,13 +13,7 @@ class VpnCallback(CallbackData, prefix="vpn"):
     payment: int | None = None  # сумма платежа
     balance: int | None = None  # остаток баланса пользователя
     choice: ChoiceType | None = None
-    payment_status: PaymentStatus | None = None
 
 
 class SettingsCallback(CallbackData, prefix="settings"):
     platform: str
-
-
-class AdminConfirmCallback(CallbackData, prefix="adm"):
-    pending_id: int
-    action: Literal["confirm", "reject"]

@@ -45,12 +45,6 @@ class VpnAction(StrEnum):
 class ChoiceType(StrEnum):
     YES = "yes"
     NO = "no"
-    STOP = "stop"
-
-
-class PaymentStatus(StrEnum):
-    SUCCESS = "success"
-    FAILED = "failed"
 
 
 # Цены по матрице (device_limit, months) → цена в рублях

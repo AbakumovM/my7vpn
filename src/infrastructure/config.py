@@ -16,8 +16,6 @@ class BotSettings(BaseModel):
 
 
 class PaymentSettings(BaseModel):
-    payment_url: str
-    payment_qr: str
     free_month: int
 
 

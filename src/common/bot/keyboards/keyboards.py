@@ -1,7 +1,6 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.common.bot.cbdata import (
-    AdminConfirmCallback,
     SettingsCallback,
     VpnCallback,
 )
@@ -9,7 +8,6 @@ from src.common.bot.keyboards.user_actions import (
     TARIFF_MATRIX,
     CallbackAction,
     ChoiceType,
-    PaymentStatus,
     VpnAction,
 )
 from src.common.bot.lexicon.lexicon import LEXICON_INLINE_RU
@@ -257,76 +255,6 @@ def get_keyboard_referral_activate(referral_id: int) -> InlineKeyboardMarkup:
             )
         ],
     ])
-
-
-def get_keyboard_approve_payment_or_cancel(
-    action: str,
-    device: str,
-    duration: int,
-    referral_id: int,
-    payment: int,
-    balance: int,
-    choice: str,
-    device_limit: int = 1,
-):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.PAYMENT_SUCCESS],
-                callback_data=VpnCallback(
-                    action=action,
-                    device=device,
-                    device_limit=device_limit,
-                    duration=duration,
-                    referral_id=referral_id,
-                    payment=payment,
-                    balance=balance,
-                    choice=choice,
-                    payment_status=PaymentStatus.SUCCESS,
-                ).pack(),
-            )
-        ]
-    )
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=LEXICON_INLINE_RU[CallbackAction.CANCEL],
-                callback_data=VpnCallback(
-                    action=action,
-                    device=device,
-                    device_limit=device_limit,
-                    duration=duration,
-                    referral_id=referral_id,
-                    payment=payment,
-                    balance=balance,
-                    choice=choice,
-                    payment_status=PaymentStatus.FAILED,
-                ).pack(),
-            )
-        ]
-    )
-    return keyboard
-
-
-def get_keyboard_admin_confirm(pending_id: int) -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="✅ Подтвердить",
-                callback_data=AdminConfirmCallback(
-                    pending_id=pending_id, action="confirm"
-                ).pack(),
-            ),
-            InlineKeyboardButton(
-                text="❌ Отклонить",
-                callback_data=AdminConfirmCallback(
-                    pending_id=pending_id, action="reject"
-                ).pack(),
-            ),
-        ]
-    ])
-    return keyboard
 
 
 def get_keyboard_vpn_received() -> InlineKeyboardMarkup:
