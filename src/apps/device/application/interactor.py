@@ -367,14 +367,28 @@ class DeviceInteractor:
                     device_limit=pending.device_limit,
                 )
             except RemnawaveUserNotFound:
-                # User deleted from Remnawave — recreate and update local references
-                rw_info = await self._remnawave_gateway.create_user(
-                    telegram_id=pending.user_telegram_id,
-                    expire_at=end_date,
-                    device_limit=pending.device_limit,
+                # UUID in DB is stale — try to find the user by telegram_id first
+                existing = await self._remnawave_gateway.get_user_by_telegram_id(
+                    pending.user_telegram_id
                 )
-                user.remnawave_uuid = rw_info.uuid
-                user.subscription_url = rw_info.subscription_url
+                if existing is not None:
+                    # User exists in Remnawave with a different UUID — sync and update
+                    user.remnawave_uuid = existing.uuid
+                    user.subscription_url = existing.subscription_url
+                    await self._remnawave_gateway.update_user(
+                        uuid=existing.uuid,
+                        expire_at=end_date,
+                        device_limit=pending.device_limit,
+                    )
+                else:
+                    # User truly absent from Remnawave — create fresh
+                    rw_info = await self._remnawave_gateway.create_user(
+                        telegram_id=pending.user_telegram_id,
+                        expire_at=end_date,
+                        device_limit=pending.device_limit,
+                    )
+                    user.remnawave_uuid = rw_info.uuid
+                    user.subscription_url = rw_info.subscription_url
             if user.subscription_url is None:
                 raise ValueError(
                     f"User {pending.user_telegram_id} has remnawave_uuid but no subscription_url"
