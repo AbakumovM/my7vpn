@@ -4,13 +4,13 @@ from datetime import date, datetime
 class TextManager:
     @staticmethod
     def get_main_menu_active(
-        user_name: str, end_date: str, used: int, limit: int, balance: int, free_days: int = 5
+        user_name: str, end_date: str, limit: int, balance: int, free_days: int = 5
     ) -> str:
         return (
             f"👋 Привет, {user_name}!\n\n"
             f"Твоя защита активна.\n\n"
             f"✅ Подписка до {end_date}\n"
-            f"📱 Устройств: {used} / {limit}\n"
+            f"📱 Устройств: до {limit}\n"
             f"💰 Баланс: {balance}₽\n\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"🎁 Пригласи друга — получи 50₽ на баланс.\n"

@@ -28,16 +28,6 @@ log = structlog.get_logger(__name__)
 router = Router()
 
 
-async def _get_hwid_used(remnawave_uuid: str | None, remnawave_gateway: RemnawaveGateway) -> int:
-    """Возвращает количество подключённых HWID-устройств. При ошибке — 0."""
-    if remnawave_uuid is None:
-        return 0
-    try:
-        return await remnawave_gateway.get_hwid_devices_count(remnawave_uuid)
-    except Exception:
-        log.warning("hwid_count_fetch_failed", uuid=remnawave_uuid)
-        return 0
-
 
 @router.message(Command(CallbackAction.START))
 async def handle_start(
@@ -45,7 +35,6 @@ async def handle_start(
     interactor: FromDishka[UserInteractor],
     user_view: FromDishka[UserView],
     device_view: FromDishka[DeviceView],
-    remnawave_gateway: FromDishka[RemnawaveGateway],
 ) -> None:
     referral_code = msg.text.split(" ")[1] if msg.text and len(msg.text.split(" ")) > 1 else None
 
@@ -89,11 +78,9 @@ async def handle_start(
 
     if sub and sub.end_date:
         end_str = sub.end_date.strftime("%d.%m.%Y")
-        remnawave_uuid = await user_view.get_remnawave_uuid(msg.from_user.id)
-        used = await _get_hwid_used(remnawave_uuid, remnawave_gateway)
         await msg.answer(
             bot_repl.get_main_menu_active(
-                msg.from_user.full_name, end_str, used, sub.device_limit, user.balance,
+                msg.from_user.full_name, end_str, sub.device_limit, user.balance,
                 free_days=app_config.payment.free_month,
             ),
             reply_markup=get_keyboard_main_menu(has_subscription=True),
@@ -109,9 +96,7 @@ async def handle_start(
 async def handle_start_callback(
     call: types.CallbackQuery,
     interactor: FromDishka[UserInteractor],
-    user_view: FromDishka[UserView],
     device_view: FromDishka[DeviceView],
-    remnawave_gateway: FromDishka[RemnawaveGateway],
 ) -> None:
     await call.answer()
     try:
@@ -120,11 +105,9 @@ async def handle_start_callback(
 
         if sub and sub.end_date:
             end_str = sub.end_date.strftime("%d.%m.%Y")
-            remnawave_uuid = await user_view.get_remnawave_uuid(call.from_user.id)
-            used = await _get_hwid_used(remnawave_uuid, remnawave_gateway)
             await call.message.answer(
                 bot_repl.get_main_menu_active(
-                    call.from_user.full_name, end_str, used, sub.device_limit, user.balance,
+                    call.from_user.full_name, end_str, sub.device_limit, user.balance,
                     free_days=app_config.payment.free_month,
                 ),
                 reply_markup=get_keyboard_main_menu(has_subscription=True),
