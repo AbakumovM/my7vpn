@@ -30,3 +30,9 @@ class PendingPaymentNotFound(Exception):
     def __init__(self, pending_id: int) -> None:
         super().__init__(f"PendingPayment id={pending_id} not found")
         self.pending_id = pending_id
+
+
+class RemnawaveUserNotFound(Exception):
+    def __init__(self, uuid: str) -> None:
+        super().__init__(f"Remnawave user uuid={uuid} not found (404)")
+        self.uuid = uuid

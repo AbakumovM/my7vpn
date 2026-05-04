@@ -1,7 +1,8 @@
 from datetime import datetime
 
 from src.apps.device.application.interfaces.remnawave_gateway import HwidDevice, RemnawaveUserInfo
-from src.infrastructure.remnawave.client import RemnawaveApiUser, RemnawaveClient
+from src.apps.device.domain.exceptions import RemnawaveUserNotFound
+from src.infrastructure.remnawave.client import RemnawaveAPIError, RemnawaveApiUser, RemnawaveClient
 
 
 class RemnawaveGatewayImpl:
@@ -33,9 +34,14 @@ class RemnawaveGatewayImpl:
         expire_at: datetime | None = None,
         device_limit: int | None = None,
     ) -> RemnawaveUserInfo:
-        raw = await self._client.update_user(
-            uuid=uuid, expire_at=expire_at, device_limit=device_limit
-        )
+        try:
+            raw = await self._client.update_user(
+                uuid=uuid, expire_at=expire_at, device_limit=device_limit
+            )
+        except RemnawaveAPIError as e:
+            if e.status_code == 404:
+                raise RemnawaveUserNotFound(uuid) from e
+            raise
         return self._map(raw)
 
     async def delete_user(self, uuid: str) -> None:

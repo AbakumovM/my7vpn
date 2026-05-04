@@ -21,6 +21,7 @@ from src.apps.device.domain.commands import (
 from src.apps.device.domain.exceptions import (
     DeviceNotFound,
     PendingPaymentNotFound,
+    RemnawaveUserNotFound,
     SubscriptionNotFound,
     UserDeviceNotFound,
 )
@@ -359,11 +360,21 @@ class DeviceInteractor:
             user.remnawave_uuid = rw_info.uuid
             user.subscription_url = rw_info.subscription_url
         else:
-            await self._remnawave_gateway.update_user(
-                uuid=user.remnawave_uuid,
-                expire_at=end_date,
-                device_limit=pending.device_limit,
-            )
+            try:
+                await self._remnawave_gateway.update_user(
+                    uuid=user.remnawave_uuid,
+                    expire_at=end_date,
+                    device_limit=pending.device_limit,
+                )
+            except RemnawaveUserNotFound:
+                # User deleted from Remnawave — recreate and update local references
+                rw_info = await self._remnawave_gateway.create_user(
+                    telegram_id=pending.user_telegram_id,
+                    expire_at=end_date,
+                    device_limit=pending.device_limit,
+                )
+                user.remnawave_uuid = rw_info.uuid
+                user.subscription_url = rw_info.subscription_url
             if user.subscription_url is None:
                 raise ValueError(
                     f"User {pending.user_telegram_id} has remnawave_uuid but no subscription_url"
