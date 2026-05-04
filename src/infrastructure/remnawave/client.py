@@ -118,6 +118,9 @@ class RemnawaveClient:
             if resp.status_code >= 400:
                 raise RemnawaveAPIError(resp.status_code, resp.text)
             data = resp.json()["response"]
+        # API returns a list; at most one user per telegram_id
+        if isinstance(data, list):
+            return self._parse_user(data[0]) if data else None
         return self._parse_user(data)
 
     async def enable_user(self, uuid: str) -> None:
