@@ -58,7 +58,6 @@ async def _send_migration_report(
     await send_long_message(bot, admin_id, report)
 
 
-
 async def _show_payment_link(
     msg_or_call: types.Message | types.CallbackQuery,
     interactor: DeviceInteractor,
