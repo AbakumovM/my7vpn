@@ -54,7 +54,7 @@ class SubscriptionInfo:
 @dataclass(frozen=True)
 class PendingPaymentInfo:
     id: int
-    user_telegram_id: int
+    user_id: int
     action: str
     device_type: str
     device_name: str | None
@@ -64,7 +64,7 @@ class PendingPaymentInfo:
 
 @dataclass(frozen=True)
 class ConfirmPaymentResult:
-    user_telegram_id: int
+    user_telegram_id: int | None  # None for web-only; used by bot notifications
     device_name: str
     action: str  # "new" | "renew"
     subscription_url: str | None
@@ -77,7 +77,7 @@ class ConfirmPaymentResult:
 
 @dataclass(frozen=True)
 class FreeSubscriptionInfo:
-    user_telegram_id: int
+    user_id: int
     subscription_url: str
     end_date: datetime
 
@@ -146,16 +146,17 @@ class DeviceInteractor:
         return DeviceCreatedInfo(device_name=device_name, user_telegram_id=cmd.telegram_id)
 
     async def create_device_free(self, cmd: CreateDeviceFree) -> FreeSubscriptionInfo:
-        user = await self._user_gateway.get_by_telegram_id(cmd.telegram_id)
+        user = await self._user_gateway.get_by_user_id(cmd.user_id)
         if user is None:
-            raise UserDeviceNotFound(cmd.telegram_id)
+            raise UserDeviceNotFound(cmd.user_id)
 
         now = datetime.now(UTC)
         end_date = now + relativedelta(days=cmd.period_days)
 
         if user.remnawave_uuid is None:
             rw_info = await self._remnawave_gateway.create_user(
-                telegram_id=cmd.telegram_id,
+                user_id=cmd.user_id,
+                telegram_id=user.telegram_id,
                 expire_at=end_date,
                 device_limit=cmd.device_limit,
             )
@@ -168,14 +169,12 @@ class DeviceInteractor:
                 device_limit=cmd.device_limit,
             )
             if user.subscription_url is None:
-                raise ValueError(
-                    f"User {cmd.telegram_id} has remnawave_uuid but no subscription_url"
-                )
+                raise ValueError(f"User {cmd.user_id} has remnawave_uuid but no subscription_url")
 
         await self._user_gateway.save(user)
 
         user_sub = UserSubscription(
-            user_telegram_id=cmd.telegram_id,
+            user_id=cmd.user_id,
             plan=cmd.period_days,
             start_date=now,
             end_date=end_date,
@@ -184,7 +183,7 @@ class DeviceInteractor:
         user_sub = await self._subscription_gateway.save(user_sub)
 
         payment = UserPayment(
-            user_telegram_id=cmd.telegram_id,
+            user_id=cmd.user_id,
             subscription_id=user_sub.id,
             amount=0,
             duration=cmd.period_days,
@@ -195,8 +194,8 @@ class DeviceInteractor:
         await self._uow.commit()
 
         return FreeSubscriptionInfo(
-            user_telegram_id=cmd.telegram_id,
-            subscription_url=user.subscription_url,  # type: ignore[arg-type]  # set above or existed
+            user_id=cmd.user_id,
+            subscription_url=user.subscription_url,  # type: ignore[arg-type]
             end_date=end_date,
         )
 
@@ -246,7 +245,7 @@ class DeviceInteractor:
     async def create_pending_payment(self, cmd: CreatePendingPayment) -> PendingPaymentInfo:
         now = datetime.now(UTC)
         pending = PendingPayment(
-            user_telegram_id=cmd.user_telegram_id,
+            user_id=cmd.user_id,
             action=cmd.action,
             device_type=cmd.device_type,
             device_name=cmd.device_name,
@@ -259,8 +258,8 @@ class DeviceInteractor:
         saved = await self._pending_gateway.save(pending)
         await self._uow.commit()
         return PendingPaymentInfo(
-            id=saved.id,  # type: ignore[arg-type]  # id is set by ORM after save, always int at this point
-            user_telegram_id=saved.user_telegram_id,
+            id=saved.id,  # type: ignore[arg-type]
+            user_id=saved.user_id,
             action=saved.action,
             device_type=saved.device_type,
             device_name=saved.device_name,
@@ -280,7 +279,7 @@ class DeviceInteractor:
         if pending.action == "new":
             end_date = now + relativedelta(months=pending.duration)
             user_sub = UserSubscription(
-                user_telegram_id=pending.user_telegram_id,
+                user_id=pending.user_id,
                 plan=pending.duration,
                 start_date=now,
                 end_date=end_date,
@@ -289,10 +288,8 @@ class DeviceInteractor:
             user_sub = await self._subscription_gateway.save(user_sub)
 
         elif pending.action == "renew":
-            # Новая модель: ищем UserSubscription по telegram_id
-            user_sub = await self._subscription_gateway.get_active_by_telegram_id(
-                pending.user_telegram_id
-            )
+            # Новая модель: ищем UserSubscription по user_id
+            user_sub = await self._subscription_gateway.get_active_by_user_id(pending.user_id)
             if user_sub is not None:
                 base = user_sub.end_date if user_sub.end_date > now else now
                 user_sub.end_date = base + relativedelta(months=pending.duration)
@@ -302,19 +299,23 @@ class DeviceInteractor:
                 end_date = user_sub.end_date
             else:
                 # Легаси: ищем Device по telegram_id (old device-based model)
-                device = await self._gateway.get_active_by_telegram_id(pending.user_telegram_id)
-                if device is None or device.subscription is None:
+                user = await self._user_gateway.get_by_user_id(pending.user_id)
+                if user is None:
+                    raise UserDeviceNotFound(pending.user_id)
+                legacy_device = None
+                if user.telegram_id is not None:
+                    legacy_device = await self._gateway.get_active_by_telegram_id(user.telegram_id)
+                if legacy_device is None or legacy_device.subscription is None:
                     raise SubscriptionNotFound(0)
-                sub = device.subscription
+                sub = legacy_device.subscription
                 base = sub.end_date if sub.end_date > now else now
                 sub.end_date = base + relativedelta(months=pending.duration)
                 sub.plan = pending.duration
-                device.device_limit = pending.device_limit
-                await self._gateway.save(device)
+                legacy_device.device_limit = pending.device_limit
+                await self._gateway.save(legacy_device)
                 end_date = sub.end_date
-                # Создаём UserSubscription — миграция на новую модель
                 user_sub = UserSubscription(
-                    user_telegram_id=pending.user_telegram_id,
+                    user_id=pending.user_id,
                     plan=pending.duration,
                     start_date=now,
                     end_date=end_date,
@@ -326,12 +327,12 @@ class DeviceInteractor:
 
         # Считаем платные платежи до текущего (для определения первой оплаты)
         existing_paid_count = await self._subscription_gateway.count_payments_for_user(
-            pending.user_telegram_id
+            pending.user_id
         )
 
         # Сохраняем Payment
         payment = UserPayment(
-            user_telegram_id=pending.user_telegram_id,
+            user_id=pending.user_id,
             subscription_id=user_sub.id,
             amount=pending.amount,
             duration=pending.duration,
@@ -340,20 +341,21 @@ class DeviceInteractor:
         await self._subscription_gateway.save_payment(payment)
 
         # Получаем User + обрабатываем баланс и Remnawave
-        user = await self._user_gateway.get_by_telegram_id(pending.user_telegram_id)
+        user = await self._user_gateway.get_by_user_id(pending.user_id)
         if user is None:
-            raise UserDeviceNotFound(pending.user_telegram_id)
+            raise UserDeviceNotFound(pending.user_id)
 
         if pending.balance_to_deduct > 0:
             if user.balance < pending.balance_to_deduct:
                 raise InsufficientBalance(
-                    pending.user_telegram_id, user.balance, pending.balance_to_deduct
+                    pending.user_id, user.balance, pending.balance_to_deduct
                 )
             user.balance -= pending.balance_to_deduct
 
         if user.remnawave_uuid is None:
             rw_info = await self._remnawave_gateway.create_user(
-                telegram_id=pending.user_telegram_id,
+                user_id=pending.user_id,
+                telegram_id=user.telegram_id,
                 expire_at=end_date,
                 device_limit=pending.device_limit,
             )
@@ -367,12 +369,13 @@ class DeviceInteractor:
                     device_limit=pending.device_limit,
                 )
             except RemnawaveUserNotFound:
-                # UUID in DB is stale — try to find the user by telegram_id first
-                existing = await self._remnawave_gateway.get_user_by_telegram_id(
-                    pending.user_telegram_id
-                )
+                # UUID устарел — ищем по telegram_id если есть, иначе создаём заново
+                existing = None
+                if user.telegram_id is not None:
+                    existing = await self._remnawave_gateway.get_user_by_telegram_id(
+                        user.telegram_id
+                    )
                 if existing is not None:
-                    # User exists in Remnawave with a different UUID — sync and update
                     user.remnawave_uuid = existing.uuid
                     user.subscription_url = existing.subscription_url
                     await self._remnawave_gateway.update_user(
@@ -381,18 +384,16 @@ class DeviceInteractor:
                         device_limit=pending.device_limit,
                     )
                 else:
-                    # User truly absent from Remnawave — create fresh
                     rw_info = await self._remnawave_gateway.create_user(
-                        telegram_id=pending.user_telegram_id,
+                        user_id=pending.user_id,
+                        telegram_id=user.telegram_id,
                         expire_at=end_date,
                         device_limit=pending.device_limit,
                     )
                     user.remnawave_uuid = rw_info.uuid
                     user.subscription_url = rw_info.subscription_url
             if user.subscription_url is None:
-                raise ValueError(
-                    f"User {pending.user_telegram_id} has remnawave_uuid but no subscription_url"
-                )
+                raise ValueError(f"User {pending.user_id} has remnawave_uuid but no subscription_url")
 
         # Реферальный бонус — только при первой платной покупке
         referrer_telegram_id: int | None = None
@@ -408,7 +409,7 @@ class DeviceInteractor:
         await self._uow.commit()
 
         return ConfirmPaymentResult(
-            user_telegram_id=pending.user_telegram_id,
+            user_telegram_id=user.telegram_id,  # None for web-only — webhook handles gracefully
             device_name="vpn",
             action=pending.action,
             subscription_url=user.subscription_url,
@@ -483,8 +484,8 @@ class DeviceInteractor:
         if pending is None:
             raise PendingPaymentNotFound(cmd.pending_id)
         info = PendingPaymentInfo(
-            id=pending.id,  # type: ignore[arg-type]  # id is set by ORM after gateway lookup, always int at this point
-            user_telegram_id=pending.user_telegram_id,
+            id=pending.id,  # type: ignore[arg-type]
+            user_id=pending.user_id,
             action=pending.action,
             device_type=pending.device_type,
             device_name=pending.device_name,
