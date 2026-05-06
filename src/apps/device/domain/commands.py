@@ -14,7 +14,7 @@ class CreateDevice:
 
 @dataclass(frozen=True)
 class CreateDeviceFree:
-    telegram_id: int
+    user_id: int               # users.id
     device_type: str
     period_days: int
     device_limit: int = 1
@@ -36,14 +36,14 @@ class RenewSubscription:
 
 @dataclass(frozen=True)
 class CreatePendingPayment:
-    user_telegram_id: int
-    action: str  # "new" | "renew"
+    user_id: int               # users.id
+    action: str                # "new" | "renew"
     device_type: str
     duration: int
     amount: int
     balance_to_deduct: int
     device_limit: int = 1
-    device_name: str | None = None  # None для new, имя для renew
+    device_name: str | None = None
 
 
 @dataclass(frozen=True)
