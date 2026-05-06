@@ -71,7 +71,8 @@ class PendingPaymentORM(Base):
     __tablename__ = "pending_payments"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_telegram_id = Column(BigInteger, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    user_telegram_id = Column(BigInteger, nullable=True)  # nullable: legacy + web-only
     action = Column(String(10), nullable=False)  # "new" | "renew"
     device_type = Column(String(20), nullable=False)
     device_name = Column(String(100), nullable=True)  # для renew
@@ -102,7 +103,8 @@ class UserPaymentORM(Base):
     __tablename__ = "user_payments"
 
     id = Column(Integer, primary_key=True)
-    user_telegram_id = Column(BigInteger, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_telegram_id = Column(BigInteger, nullable=True, index=True)  # nullable: legacy + web-only
     subscription_id = Column(
         Integer, ForeignKey("user_subscriptions.id", ondelete="SET NULL"), nullable=True
     )
