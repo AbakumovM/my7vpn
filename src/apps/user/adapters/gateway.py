@@ -18,6 +18,15 @@ class SQLAlchemyUserGateway:
             return None
         return self._to_domain(row)
 
+    async def get_by_user_id(self, user_id: int) -> User | None:
+        result = await self._session.execute(
+            select(UserORM).where(UserORM.id == user_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return self._to_domain(row)
+
     async def get_by_email(self, email: str) -> User | None:
         result = await self._session.execute(select(UserORM).where(UserORM.email == email))
         row = result.scalar_one_or_none()
