@@ -185,7 +185,7 @@ class SQLAlchemyPendingPaymentGateway:
     async def save(self, pending: PendingPayment) -> PendingPayment:
         if pending.id is None:
             orm = PendingPaymentORM(
-                user_telegram_id=pending.user_telegram_id,
+                user_id=pending.user_id,
                 action=pending.action,
                 device_type=pending.device_type,
                 device_name=pending.device_name,
@@ -209,7 +209,7 @@ class SQLAlchemyPendingPaymentGateway:
             return None
         return PendingPayment(
             id=row.id,
-            user_telegram_id=row.user_telegram_id,
+            user_id=row.user_id,  # type: ignore[arg-type]  # set by ORM after save
             action=row.action,
             device_type=row.device_type,
             device_name=row.device_name,
@@ -248,7 +248,28 @@ class SQLAlchemySubscriptionGateway:
             return None
         return UserSubscription(
             id=row.id,
-            user_telegram_id=telegram_id,
+            user_id=row.user_id,
+            plan=row.plan,
+            start_date=row.start_date,
+            end_date=row.end_date,
+            device_limit=row.device_limit,
+            is_active=row.is_active,
+        )
+
+    async def get_active_by_user_id(self, user_id: int) -> UserSubscription | None:
+        result = await self._session.execute(
+            select(UserSubscriptionORM)
+            .where(UserSubscriptionORM.user_id == user_id)
+            .where(UserSubscriptionORM.is_active.is_(True))
+            .order_by(UserSubscriptionORM.end_date.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return UserSubscription(
+            id=row.id,
+            user_id=row.user_id,
             plan=row.plan,
             start_date=row.start_date,
             end_date=row.end_date,
@@ -258,12 +279,8 @@ class SQLAlchemySubscriptionGateway:
 
     async def save(self, sub: UserSubscription) -> UserSubscription:
         if sub.id is None:
-            user_result = await self._session.execute(
-                select(UserORM).where(UserORM.telegram_id == sub.user_telegram_id)
-            )
-            user_orm = user_result.scalar_one()
             orm = UserSubscriptionORM(
-                user_id=user_orm.id,
+                user_id=sub.user_id,   # direct FK — no telegram lookup
                 plan=sub.plan,
                 start_date=sub.start_date,
                 end_date=sub.end_date,
@@ -287,7 +304,7 @@ class SQLAlchemySubscriptionGateway:
 
     async def save_payment(self, payment: UserPayment) -> UserPayment:
         orm = UserPaymentORM(
-            user_telegram_id=payment.user_telegram_id,
+            user_id=payment.user_id,
             subscription_id=payment.subscription_id,
             amount=payment.amount,
             duration=payment.duration,
@@ -300,13 +317,13 @@ class SQLAlchemySubscriptionGateway:
         )
         self._session.add(orm)
         await self._session.flush()
-        payment.id = orm.id  # type: ignore[misc]  # id set by ORM after flush
+        payment.id = orm.id  # type: ignore[misc]
         return payment
 
-    async def count_payments_for_user(self, telegram_id: int) -> int:
+    async def count_payments_for_user(self, user_id: int) -> int:
         result = await self._session.execute(
             select(func.count(UserPaymentORM.id))
-            .where(UserPaymentORM.user_telegram_id == telegram_id)
+            .where(UserPaymentORM.user_id == user_id)
             .where(UserPaymentORM.amount > 0)
         )
         return result.scalar_one()
