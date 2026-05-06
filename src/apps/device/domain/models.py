@@ -36,21 +36,21 @@ class Device:
 
 @dataclass
 class PendingPayment:
-    user_telegram_id: int
-    action: str                   # "new" | "renew"
-    device_type: str              # "Android", "iOS", "TV", "Windows", "MacOS"
-    duration: int                 # месяцев
-    amount: int                   # к оплате
+    user_id: int                   # users.id — primary identifier
+    action: str                    # "new" | "renew"
+    device_type: str
+    duration: int                  # месяцев
+    amount: int                    # к оплате
     balance_to_deduct: int
     created_at: datetime
-    device_name: str | None = None  # None для new, имя устройства для renew
+    device_name: str | None = None
     device_limit: int = 1
     id: int | None = None
 
 
 @dataclass
 class UserSubscription:
-    user_telegram_id: int
+    user_id: int                   # users.id — primary identifier
     plan: int
     start_date: datetime
     end_date: datetime
@@ -61,7 +61,7 @@ class UserSubscription:
 
 @dataclass
 class UserPayment:
-    user_telegram_id: int
+    user_id: int                   # users.id — primary identifier
     amount: int
     duration: int
     device_limit: int
