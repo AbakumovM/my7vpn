@@ -25,7 +25,11 @@ class RemnawaveUserInfo:
 
 class RemnawaveGateway(Protocol):
     async def create_user(
-        self, telegram_id: int, expire_at: datetime, device_limit: int
+        self,
+        user_id: int,
+        expire_at: datetime,
+        device_limit: int,
+        telegram_id: int | None = None,
     ) -> RemnawaveUserInfo: ...
 
     async def update_user(

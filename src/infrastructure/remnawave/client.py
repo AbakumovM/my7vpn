@@ -59,17 +59,20 @@ class RemnawaveClient:
 
     async def create_user(
         self,
-        telegram_id: int,
+        user_id: int,
         expire_at: datetime,
         device_limit: int,
+        telegram_id: int | None = None,
     ) -> RemnawaveApiUser:
+        username = f"tg{telegram_id}" if telegram_id is not None else f"web{user_id}"
         payload: dict[str, object] = {
-            "username": f"tg{telegram_id}",
+            "username": username,
             "expireAt": expire_at.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             "hwidDeviceLimit": device_limit,
-            "telegramId": telegram_id,
             "trafficLimitBytes": 0,
         }
+        if telegram_id is not None:
+            payload["telegramId"] = telegram_id
         if self._settings.default_squad_uuid:
             payload["activeInternalSquads"] = [self._settings.default_squad_uuid]
         async with httpx.AsyncClient(base_url=self._settings.url, timeout=15.0) as http:
@@ -77,7 +80,7 @@ class RemnawaveClient:
             if resp.status_code >= 400:
                 raise RemnawaveAPIError(resp.status_code, resp.text)
             data = resp.json()["response"]
-        log.info("remnawave_user_created", telegram_id=telegram_id, uuid=data["uuid"])
+        log.info("remnawave_user_created", user_id=user_id, telegram_id=telegram_id, uuid=data["uuid"])
         return self._parse_user(data)
 
     async def update_user(

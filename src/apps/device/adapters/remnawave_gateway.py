@@ -21,10 +21,17 @@ class RemnawaveGatewayImpl:
         )
 
     async def create_user(
-        self, telegram_id: int, expire_at: datetime, device_limit: int
+        self,
+        user_id: int,
+        expire_at: datetime,
+        device_limit: int,
+        telegram_id: int | None = None,
     ) -> RemnawaveUserInfo:
         raw = await self._client.create_user(
-            telegram_id=telegram_id, expire_at=expire_at, device_limit=device_limit
+            user_id=user_id,
+            expire_at=expire_at,
+            device_limit=device_limit,
+            telegram_id=telegram_id,
         )
         return self._map(raw)
 

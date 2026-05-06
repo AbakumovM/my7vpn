@@ -49,7 +49,7 @@ async def test_create_user_returns_remnawave_api_user() -> None:
         return_value=httpx.Response(201, json=make_user_response())
     )
 
-    result = await client.create_user(telegram_id=123456789, expire_at=expire_at, device_limit=3)
+    result = await client.create_user(user_id=123456789, telegram_id=123456789, expire_at=expire_at, device_limit=3)
 
     assert isinstance(result, RemnawaveApiUser)
     assert result.uuid == "550e8400-e29b-41d4-a716-446655440000"
@@ -72,7 +72,7 @@ async def test_create_user_sends_correct_payload() -> None:
         return_value=httpx.Response(201, json=make_user_response())
     )
 
-    await client.create_user(telegram_id=123456789, expire_at=expire_at, device_limit=3)
+    await client.create_user(user_id=123456789, telegram_id=123456789, expire_at=expire_at, device_limit=3)
 
     sent = route.calls.last.request
     payload = json.loads(sent.content)
@@ -96,7 +96,7 @@ async def test_create_user_raises_api_error_on_500() -> None:
     )
 
     with pytest.raises(RemnawaveAPIError) as exc_info:
-        await client.create_user(telegram_id=123456789, expire_at=expire_at, device_limit=3)
+        await client.create_user(user_id=123456789, telegram_id=123456789, expire_at=expire_at, device_limit=3)
 
     assert exc_info.value.status_code == 500
 
@@ -236,3 +236,41 @@ async def test_disable_user_sends_post_to_disable_endpoint() -> None:
     )
 
     await client.disable_user(test_uuid)  # не должно бросать исключений
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_create_user_web_only() -> None:
+    """create_user with telegram_id=None uses 'web{user_id}' username."""
+    settings = make_settings()
+    client = RemnawaveClient(settings)
+    expire_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+    route = respx.post(f"{BASE_URL}/api/users").mock(
+        return_value=httpx.Response(
+            201,
+            json={"response": {
+                "uuid": "abc-123",
+                "username": "web42",
+                "subscriptionUrl": "https://sub.url/web42",
+                "expireAt": "2026-06-01T00:00:00.000Z",
+                "status": "ACTIVE",
+                "hwidDeviceLimit": 1,
+                "telegramId": None,
+            }},
+        )
+    )
+
+    result = await client.create_user(
+        user_id=42,
+        expire_at=expire_at,
+        device_limit=1,
+        telegram_id=None,
+    )
+
+    assert result.username == "web42"
+    assert result.telegram_id is None
+
+    payload = json.loads(route.calls.last.request.content)
+    assert payload["username"] == "web42"
+    assert "telegramId" not in payload
