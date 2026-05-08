@@ -8,7 +8,10 @@ from src.apps.device.application.interactor import (
     FreeSubscriptionInfo,
     MigrateUserResult,
 )
-from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveUserInfo
+from src.apps.device.application.interfaces.gateway import DeviceGateway
+from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
+from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway, RemnawaveUserInfo
+from src.apps.device.application.interfaces.subscription_gateway import SubscriptionGateway
 from src.apps.device.domain.commands import (
     ConfirmPayment,
     CreateDevice,
@@ -31,6 +34,7 @@ from src.apps.device.domain.models import (
     UserPayment,
     UserSubscription,
 )
+from src.apps.user.application.interfaces.gateway import UserGateway
 from src.apps.user.domain.exceptions import InsufficientBalance
 from src.apps.user.domain.models import User
 
@@ -71,6 +75,28 @@ def _make_user_subscription(
         start_date=now,
         end_date=end_date or (now + timedelta(days=30)),
         device_limit=device_limit,
+    )
+
+
+def _make_pending(
+    user_id: int = 42,
+    action: str = "new",
+    duration: int = 1,
+    amount: int = 150,
+    balance_to_deduct: int = 0,
+    device_limit: int = 1,
+    pending_id: int = 1,
+) -> PendingPayment:
+    return PendingPayment(
+        id=pending_id,
+        user_id=user_id,
+        action=action,
+        device_type="vpn",
+        duration=duration,
+        amount=amount,
+        balance_to_deduct=balance_to_deduct,
+        device_limit=device_limit,
+        created_at=datetime.now(UTC),
     )
 
 
@@ -381,7 +407,7 @@ async def test_confirm_payment_new_creates_subscription_and_returns_result(
     mock_subscription_gateway.save.assert_called_once()
     mock_subscription_gateway.save_payment.assert_called_once()
     mock_gateway.save.assert_not_called()  # Device больше не создаётся
-    mock_pending_gateway.delete.assert_called_once_with(5)
+    mock_pending_gateway.update_status.assert_called_once_with(5, "confirmed")
     mock_uow.commit.assert_called_once()
     assert result.action == "new"
     assert result.subscription_url == "https://sub.test/abc"
@@ -951,3 +977,45 @@ class TestMigrateUserToRemnawave:
 
         with pytest.raises(UserDeviceNotFound):
             await interactor.migrate_user_to_remnawave(MigrateUser(telegram_id=999))
+
+
+@pytest.mark.asyncio
+async def test_confirm_payment_calls_update_status_not_delete():
+    """confirm_payment marks pending as confirmed, does not delete it."""
+    mock_pending_gateway = AsyncMock(spec=PendingPaymentGateway)
+    mock_pending_gateway.get_by_id.return_value = _make_pending(
+        user_id=42, action="new", duration=1, amount=150, balance_to_deduct=0, device_limit=1
+    )
+    mock_subscription_gateway = AsyncMock(spec=SubscriptionGateway)
+    mock_subscription_gateway.save.side_effect = lambda sub: sub
+    mock_subscription_gateway.count_payments_for_user.return_value = 0
+    mock_subscription_gateway.save_payment.side_effect = lambda p: p
+
+    mock_user = User(telegram_id=111, balance=0)
+    mock_user.id = 42
+    mock_user.remnawave_uuid = "existing-uuid"
+    mock_user.subscription_url = "https://sub.url"
+    mock_user_gateway = AsyncMock(spec=UserGateway)
+    mock_user_gateway.get_by_user_id.return_value = mock_user
+
+    mock_remnawave = AsyncMock(spec=RemnawaveGateway)
+    mock_remnawave.update_user.return_value = RemnawaveUserInfo(
+        uuid="existing-uuid", username="tg111",
+        subscription_url="https://sub.url",
+        expire_at=datetime.now(UTC) + timedelta(days=30),
+        status="ACTIVE", hwid_device_limit=1, telegram_id=111,
+    )
+
+    interactor = DeviceInteractor(
+        gateway=AsyncMock(),
+        user_gateway=mock_user_gateway,
+        uow=AsyncMock(),
+        pending_gateway=mock_pending_gateway,
+        remnawave_gateway=mock_remnawave,
+        subscription_gateway=mock_subscription_gateway,
+    )
+
+    await interactor.confirm_payment(ConfirmPayment(pending_id=1))
+
+    mock_pending_gateway.update_status.assert_called_once_with(1, "confirmed")
+    mock_pending_gateway.delete.assert_not_called()

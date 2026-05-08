@@ -405,7 +405,7 @@ class DeviceInteractor:
                 referrer_telegram_id = referrer.telegram_id
 
         await self._user_gateway.save(user)
-        await self._pending_gateway.delete(cmd.pending_id)
+        await self._pending_gateway.update_status(cmd.pending_id, "confirmed")
         await self._uow.commit()
 
         return ConfirmPaymentResult(
@@ -492,7 +492,7 @@ class DeviceInteractor:
             duration=pending.duration,
             amount=pending.amount,
         )
-        await self._pending_gateway.delete(cmd.pending_id)
+        await self._pending_gateway.update_status(cmd.pending_id, "rejected")
         await self._uow.commit()
         return info
 
