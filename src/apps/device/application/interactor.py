@@ -516,6 +516,7 @@ class DeviceInteractor:
 
         # Создаём Remnawave-аккаунт
         remnawave_user = await self._remnawave_gateway.create_user(
+            user_id=cmd.telegram_id,
             telegram_id=cmd.telegram_id,
             expire_at=end_date,
             device_limit=1,
@@ -526,7 +527,7 @@ class DeviceInteractor:
         # Создаём UserSubscription + UserPayment
         now_dt = datetime.now(UTC)
         subscription = UserSubscription(
-            user_telegram_id=cmd.telegram_id,
+            user_id=cmd.telegram_id,
             plan=(end_date - now_dt).days,
             start_date=now_dt,
             end_date=end_date,
@@ -535,7 +536,7 @@ class DeviceInteractor:
         )
         saved_sub = await self._subscription_gateway.save(subscription)
         payment = UserPayment(
-            user_telegram_id=cmd.telegram_id,
+            user_id=cmd.telegram_id,
             subscription_id=saved_sub.id,
             amount=0,
             duration=(end_date - now_dt).days,

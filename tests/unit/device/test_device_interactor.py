@@ -66,7 +66,7 @@ def _make_user_subscription(
     now = datetime.now(UTC)
     return UserSubscription(
         id=sub_id,
-        user_telegram_id=telegram_id,
+        user_id=telegram_id,
         plan=1,
         start_date=now,
         end_date=end_date or (now + timedelta(days=30)),
@@ -305,7 +305,7 @@ async def test_create_pending_payment_saves_and_returns(
 ) -> None:
     saved_pending = PendingPayment(
         id=1,
-        user_telegram_id=123,
+        user_id=123,
         action="new",
         device_type="Android",
         duration=1,
@@ -316,7 +316,7 @@ async def test_create_pending_payment_saves_and_returns(
     mock_pending_gateway.save.return_value = saved_pending
 
     cmd = CreatePendingPayment(
-        user_telegram_id=123,
+        user_id=123,
         action="new",
         device_type="Android",
         duration=1,
@@ -328,7 +328,7 @@ async def test_create_pending_payment_saves_and_returns(
     mock_pending_gateway.save.assert_called_once()
     mock_uow.commit.assert_called_once()
     assert result.id == 1
-    assert result.user_telegram_id == 123
+    assert result.user_id == 123
 
 
 def _make_remnawave_user_info(
@@ -359,7 +359,7 @@ async def test_confirm_payment_new_creates_subscription_and_returns_result(
 ) -> None:
     pending = PendingPayment(
         id=5,
-        user_telegram_id=123,
+        user_id=123,
         action="new",
         device_type="vpn",
         duration=1,
@@ -371,7 +371,7 @@ async def test_confirm_payment_new_creates_subscription_and_returns_result(
     mock_pending_gateway.get_by_id.return_value = pending
     saved_sub = _make_user_subscription(telegram_id=123, sub_id=10)
     mock_subscription_gateway.save.return_value = saved_sub
-    mock_user_gateway.get_by_telegram_id.return_value = User(
+    mock_user_gateway.get_by_user_id.return_value = User(
         telegram_id=123, balance=0, remnawave_uuid=None, subscription_url=None
     )
     mock_remnawave_gateway.create_user.return_value = _make_remnawave_user_info()
@@ -413,7 +413,7 @@ async def test_confirm_payment_new_creates_remnawave_user_when_no_uuid(
     """Новый пользователь (remnawave_uuid=None) → create_user вызывается, uuid и url сохраняются."""
     pending = PendingPayment(
         id=5,
-        user_telegram_id=123,
+        user_id=123,
         action="new",
         device_type="vpn",
         duration=1,
@@ -426,7 +426,7 @@ async def test_confirm_payment_new_creates_remnawave_user_when_no_uuid(
     saved_sub = _make_user_subscription(telegram_id=123, sub_id=10)
     mock_subscription_gateway.save.return_value = saved_sub
     user = User(telegram_id=123, balance=0, remnawave_uuid=None, subscription_url=None)
-    mock_user_gateway.get_by_telegram_id.return_value = user
+    mock_user_gateway.get_by_user_id.return_value = user
     mock_remnawave_gateway.create_user.return_value = _make_remnawave_user_info()
 
     result = await interactor.confirm_payment(ConfirmPayment(pending_id=5))
@@ -438,7 +438,6 @@ async def test_confirm_payment_new_creates_remnawave_user_when_no_uuid(
     assert result.subscription_url == "https://sub.test/abc"
     mock_uow.commit.assert_called_once()
     call_kwargs = mock_remnawave_gateway.create_user.call_args.kwargs
-    assert call_kwargs["telegram_id"] == 123
     assert call_kwargs["device_limit"] == 1
     assert call_kwargs["expire_at"] > datetime.now(UTC)
 
@@ -456,7 +455,7 @@ async def test_confirm_payment_new_updates_remnawave_user_when_uuid_exists(
     """Существующий Remnawave-пользователь → update_user, не create_user."""
     pending = PendingPayment(
         id=6,
-        user_telegram_id=123,
+        user_id=123,
         action="new",
         device_type="vpn",
         duration=3,
@@ -474,7 +473,7 @@ async def test_confirm_payment_new_updates_remnawave_user_when_uuid_exists(
         remnawave_uuid="existing-uuid",
         subscription_url="https://sub.test/existing",
     )
-    mock_user_gateway.get_by_telegram_id.return_value = user
+    mock_user_gateway.get_by_user_id.return_value = user
 
     result = await interactor.confirm_payment(ConfirmPayment(pending_id=6))
 
@@ -501,7 +500,7 @@ async def test_confirm_payment_renew_updates_subscription_and_remnawave(
         end_date=now + timedelta(days=10),
         device_limit=1,
     )
-    mock_subscription_gateway.get_active_by_telegram_id.return_value = existing_sub
+    mock_subscription_gateway.get_active_by_user_id.return_value = existing_sub
     updated_sub = _make_user_subscription(
         telegram_id=123,
         sub_id=20,
@@ -511,7 +510,7 @@ async def test_confirm_payment_renew_updates_subscription_and_remnawave(
     mock_subscription_gateway.save.return_value = updated_sub
     pending = PendingPayment(
         id=8,
-        user_telegram_id=123,
+        user_id=123,
         action="renew",
         device_type="vpn",
         duration=3,
@@ -527,7 +526,7 @@ async def test_confirm_payment_renew_updates_subscription_and_remnawave(
         remnawave_uuid="rw-uuid",
         subscription_url="https://sub.test/url",
     )
-    mock_user_gateway.get_by_telegram_id.return_value = user
+    mock_user_gateway.get_by_user_id.return_value = user
 
     result = await interactor.confirm_payment(ConfirmPayment(pending_id=8))
 
@@ -551,7 +550,7 @@ async def test_confirm_payment_renew_legacy_user_migrates_to_new_model(
     mock_uow: AsyncMock,
 ) -> None:
     """Legacy-пользователь продлевает: UserSubscription не найден → Device fallback + create_user + создаём UserSubscription."""
-    mock_subscription_gateway.get_active_by_telegram_id.return_value = None
+    mock_subscription_gateway.get_active_by_user_id.return_value = None
 
     sub = Subscription(
         device_id=1,
@@ -571,7 +570,7 @@ async def test_confirm_payment_renew_legacy_user_migrates_to_new_model(
 
     pending = PendingPayment(
         id=7,
-        user_telegram_id=123,
+        user_id=123,
         action="renew",
         device_type="vpn",
         duration=1,
@@ -582,7 +581,7 @@ async def test_confirm_payment_renew_legacy_user_migrates_to_new_model(
     )
     mock_pending_gateway.get_by_id.return_value = pending
     user = User(telegram_id=123, balance=0, remnawave_uuid=None, subscription_url=None)
-    mock_user_gateway.get_by_telegram_id.return_value = user
+    mock_user_gateway.get_by_user_id.return_value = user
     mock_remnawave_gateway.create_user.return_value = _make_remnawave_user_info(
         uuid="migrated-uuid", subscription_url="https://sub.test/migrated"
     )
@@ -607,7 +606,7 @@ class TestCreateDeviceFree:
         mock_uow: AsyncMock,
     ) -> None:
         user = User(telegram_id=42, balance=0, remnawave_uuid=None)
-        mock_user_gateway.get_by_telegram_id.return_value = user
+        mock_user_gateway.get_by_user_id.return_value = user
 
         rw_info = RemnawaveUserInfo(
             uuid="rw-uuid-123",
@@ -622,7 +621,7 @@ class TestCreateDeviceFree:
 
         saved_sub = UserSubscription(
             id=77,
-            user_telegram_id=42,
+            user_id=42,
             plan=5,
             start_date=datetime.now(UTC),
             end_date=datetime.now(UTC) + timedelta(days=5),
@@ -631,15 +630,15 @@ class TestCreateDeviceFree:
         mock_subscription_gateway.save.return_value = saved_sub
 
         saved_payment = UserPayment(
-            id=1, user_telegram_id=42, amount=0, duration=5, device_limit=1
+            id=1, user_id=42, amount=0, duration=5, device_limit=1
         )
         mock_subscription_gateway.save_payment.return_value = saved_payment
 
-        cmd = CreateDeviceFree(telegram_id=42, device_type="vpn", period_days=5, device_limit=1)
+        cmd = CreateDeviceFree(user_id=42, device_type="vpn", period_days=5, device_limit=1)
         result = await interactor.create_device_free(cmd)
 
         assert isinstance(result, FreeSubscriptionInfo)
-        assert result.user_telegram_id == 42
+        assert result.user_id == 42
         assert result.subscription_url == "https://sub.example.com/42"
         mock_remnawave_gateway.create_user.assert_awaited_once()
         mock_subscription_gateway.save.assert_awaited_once()
@@ -660,7 +659,7 @@ class TestCreateDeviceFree:
             remnawave_uuid="existing-uuid",
             subscription_url="https://sub.example.com/42",
         )
-        mock_user_gateway.get_by_telegram_id.return_value = user
+        mock_user_gateway.get_by_user_id.return_value = user
 
         mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
             uuid="existing-uuid",
@@ -674,7 +673,7 @@ class TestCreateDeviceFree:
 
         saved_sub = UserSubscription(
             id=77,
-            user_telegram_id=42,
+            user_id=42,
             plan=5,
             start_date=datetime.now(UTC),
             end_date=datetime.now(UTC) + timedelta(days=5),
@@ -683,10 +682,10 @@ class TestCreateDeviceFree:
         mock_subscription_gateway.save.return_value = saved_sub
 
         mock_subscription_gateway.save_payment.return_value = UserPayment(
-            id=2, user_telegram_id=42, amount=0, duration=5, device_limit=1
+            id=2, user_id=42, amount=0, duration=5, device_limit=1
         )
 
-        cmd = CreateDeviceFree(telegram_id=42, device_type="vpn", period_days=5, device_limit=1)
+        cmd = CreateDeviceFree(user_id=42, device_type="vpn", period_days=5, device_limit=1)
         result = await interactor.create_device_free(cmd)
 
         mock_remnawave_gateway.create_user.assert_not_awaited()
@@ -698,7 +697,7 @@ class TestConfirmPaymentReferralBonus:
     def _make_pending(
         self,
         pending_id: int = 1,
-        user_telegram_id: int = 42,
+        user_id: int = 42,
         action: str = "new",
         duration: int = 1,
         amount: int = 150,
@@ -707,7 +706,7 @@ class TestConfirmPaymentReferralBonus:
     ) -> PendingPayment:
         return PendingPayment(
             id=pending_id,
-            user_telegram_id=user_telegram_id,
+            user_id=user_id,
             action=action,
             device_type="vpn",
             duration=duration,
@@ -733,14 +732,8 @@ class TestConfirmPaymentReferralBonus:
         user.subscription_url = "https://sub.example.com"
         referrer = User(telegram_id=99, balance=100)
 
-        async def get_user(tid: int) -> User | None:
-            if tid == 42:
-                return user
-            if tid == 99:
-                return referrer
-            return None
-
-        mock_user_gateway.get_by_telegram_id.side_effect = get_user
+        mock_user_gateway.get_by_user_id.return_value = user
+        mock_user_gateway.get_by_telegram_id.return_value = referrer
 
         saved_sub = _make_user_subscription(telegram_id=42, sub_id=10)
         mock_subscription_gateway.get_active_by_telegram_id.return_value = None
@@ -748,7 +741,7 @@ class TestConfirmPaymentReferralBonus:
         mock_subscription_gateway.count_payments_for_user.return_value = 0
 
         mock_subscription_gateway.save_payment.return_value = UserPayment(
-            id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
+            id=5, user_id=42, amount=150, duration=1, device_limit=1
         )
         mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
             uuid="rw-uuid", username="u42", subscription_url="https://sub.example.com",
@@ -779,7 +772,7 @@ class TestConfirmPaymentReferralBonus:
 
         user = User(telegram_id=42, balance=0, referred_by=99, remnawave_uuid="rw-uuid")
         user.subscription_url = "https://sub.example.com"
-        mock_user_gateway.get_by_telegram_id.return_value = user
+        mock_user_gateway.get_by_user_id.return_value = user
 
         saved_sub = _make_user_subscription(telegram_id=42, sub_id=10)
         mock_subscription_gateway.get_active_by_telegram_id.return_value = None
@@ -787,7 +780,7 @@ class TestConfirmPaymentReferralBonus:
         mock_subscription_gateway.count_payments_for_user.return_value = 1
 
         mock_subscription_gateway.save_payment.return_value = UserPayment(
-            id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
+            id=5, user_id=42, amount=150, duration=1, device_limit=1
         )
         mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
             uuid="rw-uuid", username="u42", subscription_url="https://sub.example.com",
@@ -813,7 +806,7 @@ class TestConfirmPaymentReferralBonus:
 
         user = User(telegram_id=42, balance=0, referred_by=None, remnawave_uuid="rw-uuid")
         user.subscription_url = "https://sub.example.com"
-        mock_user_gateway.get_by_telegram_id.return_value = user
+        mock_user_gateway.get_by_user_id.return_value = user
 
         saved_sub = _make_user_subscription(telegram_id=42, sub_id=10)
         mock_subscription_gateway.get_active_by_telegram_id.return_value = None
@@ -821,7 +814,7 @@ class TestConfirmPaymentReferralBonus:
         mock_subscription_gateway.count_payments_for_user.return_value = 0
 
         mock_subscription_gateway.save_payment.return_value = UserPayment(
-            id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
+            id=5, user_id=42, amount=150, duration=1, device_limit=1
         )
         mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
             uuid="rw-uuid", username="u42", subscription_url="https://sub.example.com",
@@ -848,12 +841,8 @@ class TestConfirmPaymentReferralBonus:
         user = User(telegram_id=42, balance=0, referred_by=99, remnawave_uuid="rw-uuid")
         user.subscription_url = "https://sub.example.com"
 
-        async def get_user(tid: int) -> User | None:
-            if tid == 42:
-                return user
-            return None  # referrer not found
-
-        mock_user_gateway.get_by_telegram_id.side_effect = get_user
+        mock_user_gateway.get_by_user_id.return_value = user
+        mock_user_gateway.get_by_telegram_id.return_value = None  # referrer not found
 
         saved_sub = _make_user_subscription(telegram_id=42, sub_id=10)
         mock_subscription_gateway.get_active_by_telegram_id.return_value = None
@@ -861,7 +850,7 @@ class TestConfirmPaymentReferralBonus:
         mock_subscription_gateway.count_payments_for_user.return_value = 0
 
         mock_subscription_gateway.save_payment.return_value = UserPayment(
-            id=5, user_telegram_id=42, amount=150, duration=1, device_limit=1
+            id=5, user_id=42, amount=150, duration=1, device_limit=1
         )
         mock_remnawave_gateway.update_user.return_value = RemnawaveUserInfo(
             uuid="rw-uuid", username="u42", subscription_url="https://sub.example.com",
@@ -904,6 +893,7 @@ class TestMigrateUserToRemnawave:
         assert result.subscription_url == "https://sub.url/new"
         assert result.end_date == end_date
         mock_remnawave_gateway.create_user.assert_called_once_with(
+            user_id=123,
             telegram_id=123,
             expire_at=end_date,
             device_limit=1,
@@ -932,7 +922,7 @@ class TestMigrateUserToRemnawave:
         )
 
         active_sub = UserSubscription(
-            user_telegram_id=123,
+            user_id=123,
             plan=10,
             start_date=now,
             end_date=end_date,

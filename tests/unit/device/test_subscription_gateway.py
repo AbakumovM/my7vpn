@@ -16,7 +16,7 @@ class TestCountPaymentsForUser:
         session.execute.return_value = mock_result
 
         gw = SQLAlchemySubscriptionGateway(session)
-        count = await gw.count_payments_for_user(telegram_id=111)
+        count = await gw.count_payments_for_user(user_id=111)
 
         assert count == 3
         session.execute.assert_awaited_once()
@@ -28,6 +28,6 @@ class TestCountPaymentsForUser:
         session.execute.return_value = mock_result
 
         gw = SQLAlchemySubscriptionGateway(session)
-        count = await gw.count_payments_for_user(telegram_id=999)
+        count = await gw.count_payments_for_user(user_id=999)
 
         assert count == 0

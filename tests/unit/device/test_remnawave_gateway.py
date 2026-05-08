@@ -38,7 +38,7 @@ async def test_create_user_maps_api_user_to_user_info() -> None:
     gateway = RemnawaveGatewayImpl(mock_client)
 
     expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=timezone.utc)
-    result = await gateway.create_user(telegram_id=111, expire_at=expire_at, device_limit=3)
+    result = await gateway.create_user(user_id=111, expire_at=expire_at, device_limit=3)
 
     assert isinstance(result, RemnawaveUserInfo)
     assert result.uuid == "test-uuid-1234"
@@ -49,7 +49,7 @@ async def test_create_user_maps_api_user_to_user_info() -> None:
     assert result.hwid_device_limit == 3
     assert result.telegram_id == 111
     mock_client.create_user.assert_called_once_with(
-        telegram_id=111, expire_at=expire_at, device_limit=3
+        user_id=111, expire_at=expire_at, device_limit=3, telegram_id=None
     )
 
 
@@ -62,7 +62,7 @@ async def test_create_user_expire_at_is_parsed_to_datetime() -> None:
     gateway = RemnawaveGatewayImpl(mock_client)
 
     expire_at = datetime(2025, 7, 17, tzinfo=timezone.utc)
-    result = await gateway.create_user(telegram_id=111, expire_at=expire_at, device_limit=1)
+    result = await gateway.create_user(user_id=111, expire_at=expire_at, device_limit=1)
 
     assert result.expire_at.tzinfo is not None
     assert result.expire_at.year == 2025
