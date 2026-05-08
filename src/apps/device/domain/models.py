@@ -45,6 +45,7 @@ class PendingPayment:
     created_at: datetime
     device_name: str | None = None
     device_limit: int = 1
+    status: str = "pending"        # "pending" | "confirmed" | "rejected"
     id: int | None = None
 
 

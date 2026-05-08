@@ -218,6 +218,7 @@ class SQLAlchemyPendingPaymentGateway:
             balance_to_deduct=row.balance_to_deduct,
             device_limit=row.device_limit,
             created_at=row.created_at,
+            status=row.status,
         )
 
     async def delete(self, pending_id: int) -> None:
@@ -227,6 +228,15 @@ class SQLAlchemyPendingPaymentGateway:
         row = result.scalar_one_or_none()
         if row is not None:
             await self._session.delete(row)
+            await self._session.flush()
+
+    async def update_status(self, pending_id: int, status: str) -> None:
+        result = await self._session.execute(
+            select(PendingPaymentORM).where(PendingPaymentORM.id == pending_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is not None:
+            row.status = status
             await self._session.flush()
 
 

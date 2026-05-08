@@ -81,6 +81,7 @@ class PendingPaymentORM(Base):
     balance_to_deduct = Column(Integer, nullable=False, default=0)
     device_limit = Column(Integer, nullable=False, default=1, server_default="1")
     created_at = Column(DateTime(timezone=True), nullable=False)
+    status = Column(String(20), nullable=False, default="pending", server_default="pending")
 
 
 class UserSubscriptionORM(Base):
