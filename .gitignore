@@ -55,3 +55,5 @@ logs/
 # macOS
 .DS_Store
 .superpowers/
+.superpowers/
+frontend/node_modules/
