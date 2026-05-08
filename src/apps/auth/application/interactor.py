@@ -14,6 +14,7 @@ from src.apps.auth.domain.exceptions import (
 )
 from src.apps.auth.domain.models import BotAuthToken, OtpCode
 from src.apps.user.application.interfaces.gateway import UserGateway
+from src.apps.user.application.interfaces.view import UserView
 from src.apps.user.domain.models import User
 from src.infrastructure.auth import create_jwt
 from src.infrastructure.config import app_config
@@ -31,11 +32,13 @@ class AuthInteractor:
         self,
         auth_gateway: AuthGateway,
         user_gateway: UserGateway,
+        user_view: UserView,
         uow: SQLAlchemyUoW,
         email_sender: EmailSender,
     ) -> None:
         self._auth_gateway = auth_gateway
         self._user_gateway = user_gateway
+        self._user_view = user_view
         self._uow = uow
         self._email_sender = email_sender
 
@@ -71,19 +74,8 @@ class AuthInteractor:
 
         await self._uow.commit()
 
-        # Получаем user_id из БД (после save/flush у нас есть id)
-        user = await self._user_gateway.get_by_email(cmd.email)
-        assert user is not None
-
-        # Нужен внутренний id, получаем через view
-        from sqlalchemy import select  # noqa: PLC0415, E402
-
-        from src.apps.user.adapters.orm import UserORM  # noqa: PLC0415
-
-        result = await self._uow._session.execute(
-            select(UserORM.id).where(UserORM.email == cmd.email)
-        )
-        db_user_id: int = result.scalar_one()
+        db_user_id = await self._user_view.get_user_id_by_email(cmd.email)
+        assert db_user_id is not None
 
         token = create_jwt(db_user_id)
         return AuthResult(access_token=token, user_id=db_user_id)

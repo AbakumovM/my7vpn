@@ -78,3 +78,21 @@ class SQLAlchemyUserView:
             select(UserORM.telegram_id).where(UserORM.referral_code == referral_code)
         )
         return result.scalar_one_or_none()
+
+    async def get_balance_by_user_id(self, user_id: int) -> int:
+        result = await self._session.execute(
+            select(UserORM.balance).where(UserORM.id == user_id)
+        )
+        return result.scalar_one_or_none() or 0
+
+    async def get_referral_code_by_user_id(self, user_id: int) -> str | None:
+        result = await self._session.execute(
+            select(UserORM.referral_code).where(UserORM.id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_user_id_by_email(self, email: str) -> int | None:
+        result = await self._session.execute(
+            select(UserORM.id).where(UserORM.email == email)
+        )
+        return result.scalar_one_or_none()

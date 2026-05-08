@@ -13,26 +13,15 @@ router = APIRouter(prefix="/api/v1/users", tags=["users"], route_class=DishkaRou
 async def get_me(
     user_id: CurrentUser,
     user_view: FromDishka[UserView],
-    interactor: FromDishka[UserInteractor],
 ) -> dict:
     telegram_id = await user_view.get_telegram_id(user_id)
-    if telegram_id is None:
-        # Пользователь с сайта (без Telegram) — возвращаем данные по user_id
-        return {
-            "user_id": user_id,
-            "telegram_id": None,
-            "balance": 0,
-            "free_months": False,
-            "referral_code": None,
-        }
-    user = await interactor.get_or_create(GetOrCreateUser(telegram_id=telegram_id))
+    balance = await user_view.get_balance_by_user_id(user_id)
+    referral_code = await user_view.get_referral_code_by_user_id(user_id)
     return {
         "user_id": user_id,
-        "telegram_id": user.telegram_id,
-        "email": user.email,
-        "balance": user.balance,
-        "free_months": user.free_months,
-        "referral_code": user.referral_code,
+        "telegram_id": telegram_id,
+        "balance": balance,
+        "referral_code": referral_code,
     }
 
 

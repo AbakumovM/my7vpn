@@ -6,6 +6,7 @@ from src.apps.auth.application.interactor import AuthInteractor
 from src.apps.auth.application.interfaces.email_sender import EmailSender
 from src.apps.auth.application.interfaces.gateway import AuthGateway
 from src.apps.user.application.interfaces.gateway import UserGateway
+from src.apps.user.application.interfaces.view import UserView
 from src.infrastructure.database.uow import SQLAlchemyUoW
 from src.infrastructure.smtp import SmtpService
 
@@ -26,12 +27,14 @@ class AuthProvider(Provider):
         self,
         auth_gateway: AuthGateway,
         user_gateway: UserGateway,
+        user_view: UserView,
         uow: SQLAlchemyUoW,
         email_sender: EmailSender,
     ) -> AuthInteractor:
         return AuthInteractor(
             auth_gateway=auth_gateway,
             user_gateway=user_gateway,
+            user_view=user_view,
             uow=uow,
             email_sender=email_sender,
         )
