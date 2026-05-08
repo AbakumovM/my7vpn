@@ -1,12 +1,15 @@
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
 from src.apps.user.application.interactor import UserInteractor
+from src.apps.user.application.interfaces.gateway import UserGateway
 from src.apps.user.domain.commands import (
     AddReferralBonus,
     DeductUserBalance,
     GetOrCreateUser,
     GetReferralCode,
+    GetReferralCodeByUserId,
     MarkFreeMonthUsed,
 )
 from src.apps.user.domain.exceptions import (
@@ -15,7 +18,6 @@ from src.apps.user.domain.exceptions import (
     UserNotFound,
 )
 from src.apps.user.domain.models import User
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -180,5 +182,30 @@ class TestMarkFreeMonthUsed:
         )
 
         assert result.free_months is True
+        mock_gateway.save.assert_called_once()
+        mock_uow.commit.assert_called_once()
+
+
+class TestGetReferralCodeByUserId:
+    async def test_get_referral_code_by_user_id_generates_for_web_only(self) -> None:
+        """Web-only user (no telegram_id) gets referral code based on user_id."""
+        import hashlib
+
+        web_user = User(telegram_id=None, balance=0)
+        web_user.id = 55
+        web_user.referral_code = None
+
+        mock_gateway = AsyncMock(spec=UserGateway)
+        mock_gateway.get_by_user_id.return_value = web_user
+        mock_uow = AsyncMock()
+
+        interactor = UserInteractor(gateway=mock_gateway, uow=mock_uow)
+        result = await interactor.get_referral_code_by_user_id(
+            GetReferralCodeByUserId(user_id=55)
+        )
+
+        expected_code = hashlib.md5(b"55").hexdigest()[:8]
+        assert result.referral_code == expected_code
+        assert result.telegram_id is None
         mock_gateway.save.assert_called_once()
         mock_uow.commit.assert_called_once()

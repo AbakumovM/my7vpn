@@ -13,6 +13,11 @@ class GetReferralCode:
 
 
 @dataclass(frozen=True)
+class GetReferralCodeByUserId:
+    user_id: int
+
+
+@dataclass(frozen=True)
 class AddReferralBonus:
     referrer_telegram_id: int
     amount: int = 50

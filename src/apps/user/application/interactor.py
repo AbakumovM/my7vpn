@@ -8,6 +8,7 @@ from src.apps.user.domain.commands import (
     DeductUserBalance,
     GetOrCreateUser,
     GetReferralCode,
+    GetReferralCodeByUserId,
     MarkFreeMonthUsed,
     SetUserEmail,
 )
@@ -31,7 +32,7 @@ class UserInfo:
 
 @dataclass(frozen=True)
 class ReferralCodeInfo:
-    telegram_id: int
+    telegram_id: int | None     # None for web-only users
     referral_code: str
 
 
@@ -83,6 +84,25 @@ class UserInteractor:
 
         if user.referral_code is None:
             user.referral_code = _generate_referral_code(cmd.telegram_id)
+            await self._gateway.save(user)
+            await self._uow.commit()
+
+        return ReferralCodeInfo(
+            telegram_id=user.telegram_id,
+            referral_code=user.referral_code,  # type: ignore[arg-type]
+        )
+
+    async def get_referral_code_by_user_id(
+        self, cmd: GetReferralCodeByUserId
+    ) -> ReferralCodeInfo:
+        user = await self._gateway.get_by_user_id(cmd.user_id)
+        if user is None:
+            raise UserNotFound(cmd.user_id)
+
+        if user.referral_code is None:
+            # Use telegram_id as seed for Telegram users, user_id for web-only
+            seed = user.telegram_id if user.telegram_id is not None else cmd.user_id
+            user.referral_code = hashlib.md5(str(seed).encode()).hexdigest()[:8]
             await self._gateway.save(user)
             await self._uow.commit()
 
