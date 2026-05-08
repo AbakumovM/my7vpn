@@ -77,8 +77,9 @@ async def yookassa_webhook(
         log.exception("yookassa_confirm_error", pending_id=pending_id)
         return JSONResponse(content={"status": "error"})
 
-    # Уведомляем пользователя
-    await _notify_user(bot, result)
+    # Уведомляем пользователя (только если есть Telegram ID)
+    if result.user_telegram_id is not None:
+        await _notify_user(bot, result)
 
     if result.referrer_telegram_id is not None:
         try:
@@ -95,11 +96,12 @@ async def yookassa_webhook(
     details = (
         f"📱 Устройств: {result.device_limit} | 📅 {result.duration} мес | 💳 {result.amount}₽"
     )
+    user_label = str(result.user_telegram_id) if result.user_telegram_id else "web-user"
     await bot.send_message(
         chat_id=app_config.bot.admin_id,
         text=(
             f"✅ ЮKassa автоплатёж\n"
-            f"👤 {result.user_telegram_id}\n"
+            f"👤 {user_label}\n"
             f"{action_label} до {end_str}\n"
             f"{details}\n"
             f"payment_id: {payment_id}"
