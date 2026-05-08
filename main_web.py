@@ -12,8 +12,10 @@ from fastapi import FastAPI, Request, Response
 
 from ioc import create_container
 from src.apps.auth.controllers.http.router import router as auth_router
-from src.apps.device.controllers.http.router import router as device_router
 from src.apps.device.controllers.http.cabinet_router import router as cabinet_router
+from src.apps.device.controllers.http.payments_router import router as payments_router
+from src.apps.device.controllers.http.router import router as device_router
+from src.apps.device.controllers.http.tariffs_router import router as tariffs_router
 from src.apps.device.controllers.http.yookassa_router import router as yookassa_router
 from src.apps.user.controllers.http.router import router as user_router
 from src.infrastructure.config import app_config
@@ -45,6 +47,8 @@ app.include_router(user_router)
 app.include_router(device_router)
 app.include_router(yookassa_router)
 app.include_router(cabinet_router)
+app.include_router(tariffs_router)
+app.include_router(payments_router)
 
 
 @app.middleware("http")
