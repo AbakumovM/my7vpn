@@ -12,7 +12,7 @@
 ```python
 @dataclass
 class UserSubscription:
-    user_telegram_id: int
+    user_id: int       # users.id — работает и для web-only
     plan: int          # месяцы (обычно) или дни (реферал/миграция)
     start_date: datetime
     end_date: datetime
@@ -25,7 +25,7 @@ class UserSubscription:
 ```python
 @dataclass
 class UserPayment:
-    user_telegram_id: int
+    user_id: int       # users.id — работает и для web-only
     amount: int
     duration: int      # месяцев или дней
     device_limit: int
@@ -42,15 +42,16 @@ class UserPayment:
 ```python
 @dataclass
 class PendingPayment:
-    user_telegram_id: int
-    action: str           # "new" | "renew"
-    device_type: str      # "vpn"
-    duration: int         # месяцев
-    amount: int           # к оплате через провайдер (0 = бонусная оплата)
+    user_id: int           # users.id — работает и для web-only
+    action: str            # "new" | "renew"
+    device_type: str       # "vpn"
+    duration: int          # месяцев
+    amount: int            # к оплате через провайдер (0 = бонусная оплата)
     balance_to_deduct: int
     device_limit: int = 1
     device_name: str | None = None
     created_at: datetime = ...
+    status: str = "pending"  # "pending" | "confirmed" | "rejected"
     id: int | None = None
 ```
 
@@ -89,7 +90,8 @@ class Device:
 | Поле | Тип |
 |------|-----|
 | id | PK |
-| user_telegram_id | BigInteger (INDEX) |
+| user_id | FK → users.id CASCADE (INDEX) |
+| user_telegram_id | BigInteger nullable (legacy) |
 | subscription_id | FK → user_subscriptions.id SET NULL |
 | amount | Integer |
 | duration | Integer |
@@ -104,7 +106,8 @@ class Device:
 | Поле | Тип |
 |------|-----|
 | id | PK autoincrement |
-| user_telegram_id | BigInteger |
+| user_id | FK → users.id CASCADE (INDEX) |
+| user_telegram_id | BigInteger nullable (legacy) |
 | action | String(10) |
 | device_type | String(20) |
 | device_name | String(100) nullable |
@@ -113,6 +116,7 @@ class Device:
 | balance_to_deduct | Integer default=0 |
 | device_limit | Integer default=1 |
 | created_at | DateTime TZ |
+| status | String(20) default="pending" |
 
 ### Legacy таблицы (devices, subscriptions, payments)
 
@@ -145,6 +149,8 @@ class Device:
 | `list_for_user(telegram_id)` | `list[DeviceSummary]` |
 | `list_for_user_by_id(user_id)` | `list[DeviceSummary]` |
 | `get_full_info(device_id)` | `DeviceDetailInfo \| None` |
+| `get_payment_history(user_id)` | `list[PaymentHistoryItem]` |
+| `get_pending_status(pending_id, user_id)` | `PendingStatusResult \| None` |
 
 **SubscriptionInfo:**
 ```python
@@ -153,6 +159,26 @@ SubscriptionInfo:
     device_limit: int
     last_payment_amount: int | None
     subscription_url: str | None
+```
+
+**PaymentHistoryItem:**
+```python
+PaymentHistoryItem:
+    id: int
+    amount: int
+    date: datetime
+    plan: int           # месяцев
+    device_limit: int
+    payment_method: str
+    status: str
+```
+
+**PendingStatusResult:**
+```python
+PendingStatusResult:
+    status: str                 # "pending" | "confirmed" | "rejected"
+    subscription_url: str | None
+    end_date: datetime | None
 ```
 
 ---
@@ -166,22 +192,23 @@ SubscriptionInfo:
 - `save(device)`, `delete(device)`, `get_next_seq()`
 
 **SubscriptionGateway (новая):**
-- `get_active_by_telegram_id(telegram_id)` → `UserSubscription | None`
+- `get_active_by_telegram_id(telegram_id)` → `UserSubscription | None` (legacy, bot-only)
+- `get_active_by_user_id(user_id)` → `UserSubscription | None` (основной метод)
 - `save(sub)` → `UserSubscription`
 - `save_payment(payment)` → `UserPayment`
-- `count_payments_for_user(telegram_id)` → `int` — только платные (amount > 0)
+- `count_payments_for_user(user_id)` → `int` — только платные (amount > 0)
 
 ---
 
 ## Команды (domain/commands.py)
 
 ```python
-CreatePendingPayment(user_telegram_id, action, device_type, duration, amount,
+CreatePendingPayment(user_id, action, device_type, duration, amount,
                      balance_to_deduct=0, device_limit=1, device_name=None)
 ConfirmPayment(pending_id: int)
 RejectPayment(pending_id: int)
-CreateDeviceFree(telegram_id, device_type, period_days, device_limit=1)
-MigrateUser(telegram_id: int)
+CreateDeviceFree(user_id, device_type, period_days, device_limit=1)
+MigrateUser(telegram_id: int)  # только для бота, миграция старых пользователей
 CreateDevice(telegram_id, device_type, period_months, amount, balance_to_deduct=0, device_limit=1)
 RenewSubscription(device_name, period_months, amount, balance_to_deduct=0, device_limit=1)
 DeleteDevice(device_id: int)

@@ -12,12 +12,14 @@
 
 ## Получение реф-ссылки
 
+### Через бот
+
 **Команда:** `/invite` или кнопка "👫 Друзья"
 **Файл:** `src/apps/user/controllers/bot/router.py` → `handle_friends()`, `handle_invite()`
 
 ```python
 result = await interactor.get_referral_code(GetReferralCode(telegram_id))
-# result.referral_code — MD5 хэш от telegram_id, первые 8 символов
+# result.referral_code — MD5[:8] от telegram_id
 link = f"https://t.me/{bot_name}?start={result.referral_code}"
 ```
 
@@ -27,6 +29,28 @@ ReferralStats:
     invited_count: int   # кол-во приглашённых
     total_earned: int    # invited_count * 50
     balance: int         # текущий баланс
+```
+
+### Через Web API
+
+**Эндпоинт:** `GET /api/v1/users/referral` (JWT required)
+**Файл:** `src/apps/user/controllers/http/router.py`
+
+Работает для **всех** пользователей, включая web-only (без Telegram):
+
+```python
+result = await interactor.get_referral_code_by_user_id(GetReferralCodeByUserId(user_id))
+# Telegram-пользователь: MD5[:8] от telegram_id
+# web-only пользователь: MD5[:8] от user_id
+```
+
+Ответ:
+```json
+{
+  "referral_code": "abc12345",
+  "referral_link": "https://t.me/my7vpnbot?start=abc12345",
+  "invited_count": 3  // 0 для web-only пользователей
+}
 ```
 
 ---

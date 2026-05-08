@@ -49,14 +49,15 @@ class User:
 | Метод | Команда | Что делает |
 |-------|---------|-----------|
 | `get_or_create()` | `GetOrCreateUser(telegram_id, referred_by_code=None)` | Создать или получить пользователя |
-| `get_referral_code()` | `GetReferralCode(telegram_id)` | Вернуть или сгенерировать реф-код (MD5[:8]) |
+| `get_referral_code()` | `GetReferralCode(telegram_id)` | Реф-код для бот-пользователей (MD5[:8] от telegram_id) |
+| `get_referral_code_by_user_id()` | `GetReferralCodeByUserId(user_id)` | Реф-код для всех (MD5[:8] от telegram_id или user_id для web-only) |
 | `add_referral_bonus()` | `AddReferralBonus(referrer_telegram_id, amount=50)` | Добавить к балансу |
 | `deduct_balance()` | `DeductUserBalance(telegram_id, amount)` | Списать с баланса |
 | `mark_free_month_used()` | `MarkFreeMonthUsed(telegram_id)` | Установить `free_months=True` |
 | `set_email()` | `SetUserEmail(telegram_id, email)` | Сохранить email |
 | `get_or_create_web_key()` | — | Создать UUID для кабинета если нет |
 
-**Возвращает:** `UserInfo` (frozen dataclass)
+**Возвращает:** `UserInfo` (frozen dataclass); `get_referral_code*` → `ReferralCodeInfo(telegram_id: int | None, referral_code: str)`
 
 ---
 
@@ -67,10 +68,13 @@ class User:
 | Метод | Возвращает |
 |-------|-----------|
 | `get_balance(telegram_id)` | `int` |
+| `get_balance_by_user_id(user_id)` | `int` |
 | `get_user_id(telegram_id)` | `int \| None` — внутренний id |
+| `get_user_id_by_email(email)` | `int \| None` |
 | `get_telegram_id(user_id)` | `int \| None` |
 | `get_email(telegram_id)` | `str \| None` |
 | `get_referral_code(telegram_id)` | `str \| None` |
+| `get_referral_code_by_user_id(user_id)` | `str \| None` |
 | `get_referral_stats(telegram_id)` | `ReferralStats(invited_count, total_earned, balance)` |
 | `get_referrer_telegram_id(referral_code)` | `int \| None` |
 | `get_remnawave_uuid(telegram_id)` | `str \| None` |
@@ -85,6 +89,7 @@ class User:
 | Метод | Возвращает |
 |-------|-----------|
 | `get_by_telegram_id(telegram_id)` | `User \| None` |
+| `get_by_user_id(user_id)` | `User \| None` |
 | `get_by_email(email)` | `User \| None` |
 | `get_by_referral_code(referral_code)` | `User \| None` |
 | `get_by_web_key(web_key)` | `User \| None` |
@@ -96,7 +101,8 @@ class User:
 
 ```python
 GetOrCreateUser(telegram_id: int, referred_by_code: str | None = None)
-GetReferralCode(telegram_id: int)
+GetReferralCode(telegram_id: int)          # бот-флоу
+GetReferralCodeByUserId(user_id: int)      # web-флоу (поддерживает web-only)
 AddReferralBonus(referrer_telegram_id: int, amount: int = 50)
 DeductUserBalance(telegram_id: int, amount: int)
 MarkFreeMonthUsed(telegram_id: int)

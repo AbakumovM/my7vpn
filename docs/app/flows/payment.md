@@ -21,7 +21,7 @@
 
 ```python
 PendingPayment:
-    user_telegram_id: int
+    user_id: int           # users.id — основной идентификатор
     action: str            # "new" | "renew"
     device_type: str       # "vpn"
     device_name: str | None
@@ -30,6 +30,7 @@ PendingPayment:
     balance_to_deduct: int # списать с бонусного счёта
     device_limit: int      # 1-3
     created_at: datetime
+    status: str = "pending"  # "pending" | "confirmed" | "rejected"
     id: int | None
 ```
 
@@ -37,8 +38,11 @@ PendingPayment:
 ```
 create_pending_payment()  →  [ожидание оплаты]  →  confirm_payment() / reject_payment()
      ↓                              ↓                        ↓
-  запись в БД              вебхук / кнопка админа      удаление из БД
+  запись в БД              вебхук / кнопка         update_status("confirmed"|"rejected")
+                           YooKassa / web API      запись остаётся в БД (для polling)
 ```
+
+> Запись **не удаляется** — статус обновляется. Это позволяет фронту поллить `GET /api/v1/payments/{id}/status` после редиректа с YooKassa.
 
 ---
 
@@ -142,9 +146,36 @@ TARIFF_MATRIX = {
 **ConfirmPaymentResult:**
 ```python
 ConfirmPaymentResult:
-    user_telegram_id: int
+    user_telegram_id: int | None # None для web-only пользователей
     action: str                  # "new" | "renew"
     subscription_url: str | None
     end_date: datetime
     referrer_telegram_id: int | None
+```
+
+---
+
+## Web-флоу оплаты (HTTP API)
+
+Для пользователей сайта (в т.ч. без Telegram):
+
+```
+1. GET  /api/v1/tariffs          → показать матрицу цен
+2. POST /api/v1/payments/initiate → получить pending_id + payment_url
+     ↓
+   if payment_url != null:
+3a. Редирект → YooKassa → вебхук → confirm_payment()
+     polling: GET /api/v1/payments/{id}/status
+   if payment_url == null (balance покрывает):
+3b. POST /api/v1/payments/{id}/confirm → подтвердить немедленно
+     ↓
+4. Получить subscription_url из ответа confirm или status polling
+```
+
+**Расчёт суммы в `initiate`:**
+```python
+full_amount   = TARIFF_MATRIX[device_limit][plan]
+balance_used  = min(user.balance, full_amount)
+final_amount  = full_amount - balance_used
+# payment_url = None если final_amount == 0
 ```
