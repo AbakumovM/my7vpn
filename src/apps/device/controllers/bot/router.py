@@ -68,12 +68,12 @@ async def _show_payment_link(
     amount: int,
     balance: int,
     device_name: str | None,
-    user_telegram_id: int,
+    user_id: int,
 ) -> None:
     """Создать pending, получить ссылку ЮKassa и отправить пользователю."""
     pending = await interactor.create_pending_payment(
         CreatePendingPayment(
-            user_telegram_id=user_telegram_id,
+            user_id=user_id,
             action=action,
             device_type=device,
             duration=duration,
@@ -141,6 +141,12 @@ async def handle_vpn_flow(
     balance = callback_data.balance
     choice = callback_data.choice
 
+    # Resolve telegram_id → internal user_id
+    user_id = await user_view.get_user_id(call.from_user.id)
+    if user_id is None:
+        await call.answer("Ошибка: пользователь не найден")
+        return
+
     # Реферальный бесплатный период — обрабатываем первым, минуя все платёжные шаги
     if action == VpnAction.REFERRAL:
         try:
@@ -152,7 +158,7 @@ async def handle_vpn_flow(
 
         result_free = await interactor.create_device_free(
             CreateDeviceFree(
-                telegram_id=call.from_user.id,
+                user_id=user_id,
                 device_type="vpn",
                 period_days=app_config.payment.free_month,
                 device_limit=1,
@@ -253,7 +259,7 @@ async def handle_vpn_flow(
             await call.answer()
             pending = await interactor.create_pending_payment(
                 CreatePendingPayment(
-                    user_telegram_id=call.from_user.id,
+                    user_id=user_id,
                     action="new" if action == CallbackAction.NEW_SUB else "renew",
                     device_type="vpn",
                     duration=duration,
@@ -288,7 +294,7 @@ async def handle_vpn_flow(
             amount=payment,
             balance=balance,
             device_name=None,
-            user_telegram_id=call.from_user.id,
+            user_id=user_id,
         )
         await call.answer()
         return
