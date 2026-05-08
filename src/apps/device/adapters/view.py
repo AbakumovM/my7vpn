@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.apps.device.adapters.orm import (
     DeviceORM,
     PaymentORM,
+    PendingPaymentORM,
     SubscriptionORM,
     UserPaymentORM,
     UserSubscriptionORM,
@@ -13,6 +14,8 @@ from src.apps.device.adapters.orm import (
 from src.apps.device.application.interfaces.view import (
     DeviceDetailInfo,
     DeviceSummary,
+    PaymentHistoryItem,
+    PendingStatusResult,
     SubscriptionInfo,
 )
 from src.apps.user.adapters.orm import UserORM
@@ -133,4 +136,67 @@ class SQLAlchemyDeviceView:
             device_limit=row.device_limit,
             last_payment_amount=last_amount,
             subscription_url=row.subscription_url,
+        )
+
+    async def get_payment_history(self, user_id: int) -> list[PaymentHistoryItem]:
+        result = await self._session.execute(
+            select(
+                UserPaymentORM.id,
+                UserPaymentORM.amount,
+                UserPaymentORM.payment_date,
+                UserPaymentORM.duration,
+                UserPaymentORM.device_limit,
+                UserPaymentORM.payment_method,
+                UserPaymentORM.status,
+            )
+            .where(UserPaymentORM.user_id == user_id)
+            .order_by(UserPaymentORM.payment_date.desc())
+        )
+        return [
+            PaymentHistoryItem(
+                id=row.id,
+                amount=row.amount,
+                date=row.payment_date,
+                plan=row.duration,
+                device_limit=row.device_limit,
+                payment_method=row.payment_method or "карта",
+                status=row.status,
+            )
+            for row in result.all()
+        ]
+
+    async def get_pending_status(
+        self, pending_id: int, user_id: int
+    ) -> PendingStatusResult | None:
+        result = await self._session.execute(
+            select(PendingPaymentORM.status)
+            .where(PendingPaymentORM.id == pending_id)
+            .where(PendingPaymentORM.user_id == user_id)
+        )
+        status = result.scalar_one_or_none()
+        if status is None:
+            return None
+
+        if status in ("pending", "rejected"):
+            return PendingStatusResult(status=status, subscription_url=None, end_date=None)
+
+        # status == "confirmed" — look up current subscription data
+        url_result = await self._session.execute(
+            select(UserORM.subscription_url).where(UserORM.id == user_id)
+        )
+        subscription_url = url_result.scalar_one_or_none()
+
+        sub_result = await self._session.execute(
+            select(UserSubscriptionORM.end_date)
+            .where(UserSubscriptionORM.user_id == user_id)
+            .where(UserSubscriptionORM.is_active.is_(True))
+            .order_by(UserSubscriptionORM.end_date.desc())
+            .limit(1)
+        )
+        end_date = sub_result.scalar_one_or_none()
+
+        return PendingStatusResult(
+            status="confirmed",
+            subscription_url=subscription_url,
+            end_date=end_date,
         )
