@@ -30,7 +30,7 @@ export default function LoginPage() {
       .catch(() => { setStep('email'); setError('Ссылка устарела. Войдите через email.') })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function submitEmail(e: React.FormEvent) {
+  async function submitEmail(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true); setError(null)
     try {
@@ -42,7 +42,7 @@ export default function LoginPage() {
     } finally { setLoading(false) }
   }
 
-  async function submitOtp(e: React.FormEvent) {
+  async function submitOtp(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true); setError(null)
     try {
