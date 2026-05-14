@@ -148,6 +148,8 @@ class SQLAlchemyDeviceView:
             )
             .join(UserORM, UserSubscriptionORM.user_id == UserORM.id)
             .where(UserSubscriptionORM.user_id == user_id)
+            .where(UserSubscriptionORM.is_active.is_(True))
+            .where(UserSubscriptionORM.end_date > datetime.now(UTC))
             .order_by(UserSubscriptionORM.end_date.desc())
             .limit(1)
         )
