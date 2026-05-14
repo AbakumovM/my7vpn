@@ -34,6 +34,22 @@ async def list_devices(
     return [{"id": d.id, "device_name": d.device_name} for d in devices]
 
 
+@router.get("/subscription")
+async def get_subscription(
+    user_id: CurrentUser,
+    device_view: FromDishka[DeviceView],
+) -> dict | None:
+    info = await device_view.get_subscription_info_by_user_id(user_id)
+    if info is None:
+        return None
+    return {
+        "end_date": info.end_date.isoformat() if info.end_date else None,
+        "device_limit": info.device_limit,
+        "last_payment_amount": info.last_payment_amount,
+        "subscription_url": info.subscription_url,
+    }
+
+
 @router.get("/{device_id}")
 async def get_device(
     device_id: int,

@@ -138,6 +138,36 @@ class SQLAlchemyDeviceView:
             subscription_url=row.subscription_url,
         )
 
+    async def get_subscription_info_by_user_id(self, user_id: int) -> SubscriptionInfo | None:
+        """Works for both Telegram users and web-only users (no telegram_id needed)."""
+        row_result = await self._session.execute(
+            select(
+                UserSubscriptionORM.end_date,
+                UserSubscriptionORM.device_limit,
+                UserORM.subscription_url,
+            )
+            .join(UserORM, UserSubscriptionORM.user_id == UserORM.id)
+            .where(UserSubscriptionORM.user_id == user_id)
+            .order_by(UserSubscriptionORM.end_date.desc())
+            .limit(1)
+        )
+        row = row_result.first()
+        if row is None:
+            return None
+        last_payment_result = await self._session.execute(
+            select(UserPaymentORM.amount)
+            .where(UserPaymentORM.user_id == user_id)
+            .order_by(UserPaymentORM.payment_date.desc())
+            .limit(1)
+        )
+        last_amount = last_payment_result.scalar_one_or_none()
+        return SubscriptionInfo(
+            end_date=row.end_date,
+            device_limit=row.device_limit,
+            last_payment_amount=last_amount,
+            subscription_url=row.subscription_url,
+        )
+
     async def get_payment_history(self, user_id: int) -> list[PaymentHistoryItem]:
         result = await self._session.execute(
             select(

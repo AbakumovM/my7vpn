@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.apps.device.adapters.view import SQLAlchemyDeviceView
 
@@ -21,4 +22,14 @@ async def test_get_pending_status_returns_none_for_unknown_pending():
     session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
     view = SQLAlchemyDeviceView(session)
     result = await view.get_pending_status(pending_id=999, user_id=42)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_subscription_info_by_user_id_returns_none_for_unknown():
+    """Returns None when no subscription found for this user_id."""
+    session = AsyncMock()
+    session.execute.return_value = MagicMock(first=MagicMock(return_value=None))
+    view = SQLAlchemyDeviceView(session)
+    result = await view.get_subscription_info_by_user_id(user_id=999)
     assert result is None
