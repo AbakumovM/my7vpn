@@ -71,7 +71,7 @@ export default function LoginPage() {
       <div style={S.card} className="fade-in-up">
         <div style={{ textAlign: 'center', marginBottom: '36px' }}>
           <h1 style={{ fontFamily: 'Cormorant Garamond', fontSize: '2rem', fontWeight: 300, letterSpacing: '0.06em', marginBottom: '4px' }}>
-            MY7VPN
+            ZEVSgate
           </h1>
           <p style={{ ...S.label, margin: 0, textAlign: 'center' }}>Личный кабинет</p>
         </div>

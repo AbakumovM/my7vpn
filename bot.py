@@ -1,22 +1,20 @@
 import asyncio
 import logging
-import os
-
-from typing import Any, Awaitable, Callable, Union
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import BaseMiddleware, Bot, Dispatcher, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from dotenv import load_dotenv
-
 from database.device_service import get_count_device_for_user
 from database.user_service import get_user
-from keyboards.commands import set_commands
 from handlers import router
-from utils.scheduler import setup_scheduler
+from keyboards.commands import set_commands
+
 from config.config_app import app_config
+from utils.scheduler import setup_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +31,7 @@ class RegistrationClosedMiddleware(BaseMiddleware):
     async def __call__(
         self,
         handler: Callable[[types.TelegramObject, dict[str, Any]], Awaitable[Any]],
-        event: Union[types.Message, types.CallbackQuery],
+        event: types.Message | types.CallbackQuery,
         data: dict[str, Any],
     ) -> Any:
         if app_config.service.registration_open:

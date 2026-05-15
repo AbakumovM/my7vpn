@@ -1,8 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock
 
-from src.apps.user.application.interfaces.gateway import UserGateway
+import pytest
+
 from src.apps.user.application.interactor import UserInteractor
+from src.apps.user.application.interfaces.gateway import UserGateway
 from src.infrastructure.database.uow import SQLAlchemyUoW
 
 

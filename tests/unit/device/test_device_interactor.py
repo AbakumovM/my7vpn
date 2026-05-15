@@ -8,9 +8,11 @@ from src.apps.device.application.interactor import (
     FreeSubscriptionInfo,
     MigrateUserResult,
 )
-from src.apps.device.application.interfaces.gateway import DeviceGateway
 from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
-from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway, RemnawaveUserInfo
+from src.apps.device.application.interfaces.remnawave_gateway import (
+    RemnawaveGateway,
+    RemnawaveUserInfo,
+)
 from src.apps.device.application.interfaces.subscription_gateway import SubscriptionGateway
 from src.apps.device.domain.commands import (
     ConfirmPayment,

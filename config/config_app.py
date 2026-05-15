@@ -1,5 +1,5 @@
+
 from pydantic import BaseModel, Field
-from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

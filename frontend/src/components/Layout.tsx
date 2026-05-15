@@ -51,7 +51,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'var(--white)' }}>
           <LogoIcon />
           <span style={{ fontFamily: 'JetBrains Mono', fontSize: '0.82rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 700 }}>
-            MY7VPN
+            ZEVSgate
           </span>
         </Link>
 
@@ -98,7 +98,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         display: 'flex',
         justifyContent: 'space-between',
       }}>
-        <span style={{ fontSize: '0.62rem', color: 'var(--muted)', letterSpacing: '0.1em', fontFamily: 'JetBrains Mono' }}>MY7VPN © 2026</span>
+        <span style={{ fontSize: '0.62rem', color: 'var(--muted)', letterSpacing: '0.1em', fontFamily: 'JetBrains Mono' }}>ZEVSgate © 2026</span>
         <span style={{ fontSize: '0.62rem', color: 'var(--border)', letterSpacing: '0.08em', fontFamily: 'JetBrains Mono' }}>SECURE · FAST · PRIVATE</span>
       </footer>
 

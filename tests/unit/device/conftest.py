@@ -1,11 +1,12 @@
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
+from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.device.application.interfaces.gateway import DeviceGateway
 from src.apps.device.application.interfaces.pending_gateway import PendingPaymentGateway
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveGateway
 from src.apps.device.application.interfaces.subscription_gateway import SubscriptionGateway
-from src.apps.device.application.interactor import DeviceInteractor
 from src.apps.user.application.interfaces.gateway import UserGateway
 from src.infrastructure.database.uow import SQLAlchemyUoW
 

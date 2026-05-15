@@ -1,12 +1,12 @@
 import logging
 import random
-from datetime import datetime, timezone
-
-from dateutil.relativedelta import relativedelta
-from sqlalchemy import func, select, text
+from datetime import UTC, datetime
 
 from database.models import AsyncSessionLocal, Device, Payment, Subscription, User
+from dateutil.relativedelta import relativedelta
+from sqlalchemy import func, select, text
 from utils.utl import generate_referral_code
+
 from config.config_app import app_config
 
 logger = logging.getLogger(__name__)
@@ -43,14 +43,14 @@ async def create_vpn(
 
                 if free_month:
                     period = app_config.payment.free_month
-                    end_date = datetime.now(timezone.utc) + relativedelta(days=period)
+                    end_date = datetime.now(UTC) + relativedelta(days=period)
                 else:
-                    end_date = datetime.now(timezone.utc) + relativedelta(months=period)
+                    end_date = datetime.now(UTC) + relativedelta(months=period)
 
                 sub = Subscription(
                     device_id=device.id,
                     plan=period,
-                    start_date=datetime.now(timezone.utc),
+                    start_date=datetime.now(UTC),
                     end_date=end_date,
                 )
                 session.add(sub)
@@ -60,7 +60,7 @@ async def create_vpn(
                 pay = Payment(
                     subscription_id=sub.id,
                     amount=0 if free_month else tariff,
-                    payment_date=datetime.now(timezone.utc),
+                    payment_date=datetime.now(UTC),
                 )
                 session.add(pay)
                 await session.commit()

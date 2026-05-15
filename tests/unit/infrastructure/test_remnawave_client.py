@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -43,7 +43,7 @@ async def test_create_user_returns_remnawave_api_user() -> None:
     """create_user отправляет POST /api/users и возвращает RemnawaveApiUser."""
     settings = make_settings()
     client = RemnawaveClient(settings)
-    expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=timezone.utc)
+    expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=UTC)
 
     respx.post(f"{BASE_URL}/api/users").mock(
         return_value=httpx.Response(201, json=make_user_response())
@@ -66,7 +66,7 @@ async def test_create_user_sends_correct_payload() -> None:
     """create_user отправляет username=tg{id}, trafficLimitBytes=0, hwidDeviceLimit."""
     settings = make_settings()
     client = RemnawaveClient(settings)
-    expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=timezone.utc)
+    expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=UTC)
 
     route = respx.post(f"{BASE_URL}/api/users").mock(
         return_value=httpx.Response(201, json=make_user_response())
@@ -89,7 +89,7 @@ async def test_create_user_raises_api_error_on_500() -> None:
     """create_user бросает RemnawaveAPIError при ответе 500."""
     settings = make_settings()
     client = RemnawaveClient(settings)
-    expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=timezone.utc)
+    expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=UTC)
 
     respx.post(f"{BASE_URL}/api/users").mock(
         return_value=httpx.Response(500, text="Internal Server Error")
@@ -107,7 +107,7 @@ async def test_update_user_sends_patch_with_uuid() -> None:
     """update_user отправляет PATCH /api/users с uuid и expireAt."""
     settings = make_settings()
     client = RemnawaveClient(settings)
-    expire_at = datetime(2026, 1, 17, 15, 38, 45, tzinfo=timezone.utc)
+    expire_at = datetime(2026, 1, 17, 15, 38, 45, tzinfo=UTC)
 
     respx.patch(f"{BASE_URL}/api/users").mock(
         return_value=httpx.Response(200, json=make_user_response(
@@ -244,7 +244,7 @@ async def test_create_user_web_only() -> None:
     """create_user with telegram_id=None uses 'web{user_id}' username."""
     settings = make_settings()
     client = RemnawaveClient(settings)
-    expire_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    expire_at = datetime(2026, 6, 1, tzinfo=UTC)
 
     route = respx.post(f"{BASE_URL}/api/users").mock(
         return_value=httpx.Response(

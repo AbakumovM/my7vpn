@@ -16,14 +16,14 @@ import sys
 
 import httpx
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, ".")
 
-from src.infrastructure.config import app_config
 import src.apps.user.adapters.orm  # noqa: F401 — регистрирует UserORM в маппере
 from src.apps.device.adapters.orm import DeviceORM
+from src.infrastructure.config import app_config
 
 
 async def fetch_xui_clients() -> list[dict]:

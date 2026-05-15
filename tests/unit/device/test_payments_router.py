@@ -1,14 +1,15 @@
+from unittest.mock import AsyncMock
+
 import pytest
-from httpx import AsyncClient, ASGITransport
-from fastapi import FastAPI
 from dishka import Provider, Scope, provide
 from dishka.integrations.fastapi import setup_dishka
-from unittest.mock import AsyncMock
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 from src.apps.device.application.interactor import DeviceInteractor, PendingPaymentInfo
 from src.apps.device.application.interfaces.view import DeviceView, PendingStatusResult
-from src.apps.user.application.interfaces.view import UserView
 from src.apps.device.controllers.http.payments_router import router
+from src.apps.user.application.interfaces.view import UserView
 from src.infrastructure.auth import create_jwt
 
 

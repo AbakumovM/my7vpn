@@ -1,8 +1,9 @@
-import pytest
-from httpx import AsyncClient, ASGITransport
-from fastapi import FastAPI
-from dishka.integrations.fastapi import setup_dishka
 from unittest.mock import MagicMock
+
+import pytest
+from dishka.integrations.fastapi import setup_dishka
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 from src.apps.device.controllers.http.tariffs_router import router
 

@@ -1,15 +1,14 @@
 import asyncio
 import logging
-import os
 from datetime import datetime
 from io import StringIO
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
 
+from config.config_app import app_config
 from database.db_service import get_weekly_stats, scheduled_payments
 from lexicon.text_manager import bot_repl
-from config.config_app import app_config
 
 ADMIN_ID = app_config.bot.admin_id
 logger = logging.getLogger(__name__)

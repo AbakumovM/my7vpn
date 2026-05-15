@@ -1,6 +1,7 @@
-import pytest
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.apps.device.adapters.migration_view import SQLAlchemyMigrationView
 

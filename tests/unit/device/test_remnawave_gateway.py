@@ -1,12 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
 from src.apps.device.adapters.remnawave_gateway import RemnawaveGatewayImpl
 from src.apps.device.application.interfaces.remnawave_gateway import RemnawaveUserInfo
-from src.infrastructure.remnawave.client import RemnawaveApiUser, RemnawaveAPIError
-
+from src.infrastructure.remnawave.client import RemnawaveApiUser
 
 pytestmark = pytest.mark.asyncio
 
@@ -37,7 +36,7 @@ async def test_create_user_maps_api_user_to_user_info() -> None:
     mock_client.create_user.return_value = make_api_user()
     gateway = RemnawaveGatewayImpl(mock_client)
 
-    expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=timezone.utc)
+    expire_at = datetime(2025, 7, 17, 15, 38, 45, tzinfo=UTC)
     result = await gateway.create_user(user_id=111, expire_at=expire_at, device_limit=3)
 
     assert isinstance(result, RemnawaveUserInfo)
@@ -61,7 +60,7 @@ async def test_create_user_expire_at_is_parsed_to_datetime() -> None:
     )
     gateway = RemnawaveGatewayImpl(mock_client)
 
-    expire_at = datetime(2025, 7, 17, tzinfo=timezone.utc)
+    expire_at = datetime(2025, 7, 17, tzinfo=UTC)
     result = await gateway.create_user(user_id=111, expire_at=expire_at, device_limit=1)
 
     assert result.expire_at.tzinfo is not None
@@ -76,7 +75,7 @@ async def test_update_user_delegates_to_client() -> None:
     mock_client.update_user.return_value = make_api_user(uuid="upd-uuid")
     gateway = RemnawaveGatewayImpl(mock_client)
 
-    expire_at = datetime(2026, 1, 17, tzinfo=timezone.utc)
+    expire_at = datetime(2026, 1, 17, tzinfo=UTC)
     result = await gateway.update_user(uuid="upd-uuid", expire_at=expire_at)
 
     assert result.uuid == "upd-uuid"

@@ -84,16 +84,66 @@ UPDATE pending_payments SET user_id = u.id
 ```
 Telegram-пользователь:
   /start → get_or_create_user(telegram_id) → users(id=42, telegram_id=111)
-  Web login via /web → JWT с user_id=42 ✅
+  Web login via /web → JWT с user_id=42
+  Remnawave username: "tg111" ✅
 
 Web-only пользователь (OTP email):
   OTP → users(id=55, telegram_id=null, email=user@example.com)
   JWT с user_id=55
-  Может: смотреть профиль, историю, реферальный код
-  Для подписки: нужен Telegram (bot-token login или будущий Login Widget)
+  Может: всё — профиль, историю, реферальный код, оформить и продлить подписку
+  Remnawave username: "web55", telegramId: null ✅
 
 Привязка аккаунтов (будущий Telegram Login Widget):
   Отдельная задача — merge web-аккаунта с Telegram-аккаунтом
+```
+
+### Изменения в Remnawave-адаптере
+
+`RemnawaveGateway.create_user` получает дополнительный параметр `user_id: int` и делает `telegram_id` опциональным:
+
+```python
+# Было
+async def create_user(self, telegram_id: int, expire_at, device_limit) -> RemnawaveUserInfo
+
+# Стало
+async def create_user(
+    self, user_id: int, expire_at, device_limit,
+    telegram_id: int | None = None
+) -> RemnawaveUserInfo
+```
+
+Логика построения payload в клиенте:
+```python
+username = f"tg{telegram_id}" if telegram_id else f"web{user_id}"
+payload = {
+    "username": username,
+    "expireAt": ...,
+    "hwidDeviceLimit": device_limit,
+    "trafficLimitBytes": 0,
+}
+if telegram_id:
+    payload["telegramId"] = telegram_id
+```
+
+**Путь восстановления в `confirm_payment`** (когда `remnawave_uuid` устарел):
+- Если у пользователя есть `telegram_id` → искать в Remnawave по `get_user_by_telegram_id` (текущее поведение)
+- Если `telegram_id is None` (web-only) → пропустить lookup, создать новый аккаунт сразу
+
+```python
+except RemnawaveUserNotFound:
+    if user.telegram_id is not None:
+        existing = await self._remnawave_gateway.get_user_by_telegram_id(user.telegram_id)
+        if existing is not None:
+            user.remnawave_uuid = existing.uuid
+            user.subscription_url = existing.subscription_url
+            await self._remnawave_gateway.update_user(...)
+            # готово — выходим
+            ...
+    # web-only или не найден по telegram_id — создаём заново
+    rw_info = await self._remnawave_gateway.create_user(
+        user_id=user.id, telegram_id=user.telegram_id,
+        expire_at=end_date, device_limit=pending.device_limit,
+    )
 ```
 
 ---
@@ -137,13 +187,13 @@ Web-only пользователь (OTP email):
 ```
 
 Логика:
-1. Вычислить `amount` из TARIFF_MATRIX
+1. Вычислить `amount` из TARIFF_MATRIX по `device_limit` + `plan`
 2. `balance_used = min(user.balance, amount)`, `final_amount = amount - balance_used`
 3. `create_pending_payment(user_id, action, plan, device_limit, amount=final_amount, balance_to_deduct=balance_used)`
-4. Если `final_amount == 0` → `payment_url = null` (сразу подтвердить через `/initiate/confirm`)
+4. Если `final_amount == 0` → `payment_url = null` (клиент сразу вызывает `POST /payments/{pending_id}/confirm`)
 5. Иначе → `yookassa_client.create_payment(final_amount, pending_id)` → вернуть `payment_url`
 
-Требует `telegram_id` для создания/обновления Remnawave-аккаунта. Если `telegram_id == null` → `403` с сообщением "Link Telegram to subscribe".
+Работает для обоих типов пользователей: Telegram и web-only. Remnawave-аккаунт создаётся в `confirm_payment` с username `"tg{telegram_id}"` или `"web{user_id}"` в зависимости от наличия telegram_id.
 
 ### POST /api/v1/payments/{pending_id}/confirm
 
@@ -255,7 +305,7 @@ Web-only пользователь (OTP email):
 После имплементации проверить:
 
 1. **Telegram-пользователь:** `/start` → `/web` → login → `GET /api/v1/users/me` → `POST /api/v1/payments/initiate` → YooKassa flow → `GET /api/v1/payments/{id}/status` = confirmed
-2. **Web-only (OTP):** register → `GET /api/v1/users/me` → `GET /api/v1/users/referral` → `POST /api/v1/payments/initiate` = 403
+2. **Web-only (OTP):** register → `GET /api/v1/users/me` → `GET /api/v1/users/referral` → `POST /api/v1/payments/initiate` → YooKassa → подписка создана с username `"web{user_id}"` в Remnawave
 3. **История:** после оплаты `GET /api/v1/payments/history` возвращает запись
 4. **Тарифы:** `GET /api/v1/tariffs` без авторизации возвращает матрицу
 5. **Бот:** все существующие flows (покупка, продление, реферал) продолжают работать

@@ -1,4 +1,3 @@
-import os
 from datetime import datetime
 
 from config.config_app import app_config
