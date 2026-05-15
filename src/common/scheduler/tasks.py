@@ -44,6 +44,7 @@ _DAYS_LABELS: dict[int, str] = {
 async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None:
     log.info("notification_job_started")
     sent_by_days: dict[int, int] = {d: 0 for d in NOTIFICATION_DAYS}
+    sent_ids_by_days: dict[int, list[int]] = {d: [] for d in NOTIFICATION_DAYS}
     skipped = 0
     errors = 0
 
@@ -78,6 +79,7 @@ async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None
                     end_date=str(sub.end_date),
                 )
                 sent_by_days[sub.days_before] += 1
+                sent_ids_by_days[sub.days_before].append(sub.telegram_id)
             except Exception:
                 log.exception(
                     "notification_send_failed",
@@ -88,15 +90,28 @@ async def send_expiry_notifications(bot: Bot, container: AsyncContainer) -> None
 
     total_sent = sum(sent_by_days.values())
     log.info("notification_job_done", sent=total_sent, skipped=skipped, errors=errors)
-    await send_admin_report(bot, sent_by_days, skipped, errors)
+    await send_admin_report(bot, sent_by_days, sent_ids_by_days, skipped, errors)
 
 
-async def send_admin_report(bot: Bot, sent_by_days: dict[int, int], skipped: int, errors: int) -> None:
+async def send_admin_report(
+    bot: Bot,
+    sent_by_days: dict[int, int],
+    sent_ids_by_days: dict[int, list[int]],
+    skipped: int,
+    errors: int,
+) -> None:
     total = sum(sent_by_days.values())
-    breakdown = "\n".join(
-        f"  • {_DAYS_LABELS.get(d, f'{d} дн.')}: {sent_by_days[d]}"
-        for d in NOTIFICATION_DAYS
-    )
+    breakdown_lines = []
+    for d in NOTIFICATION_DAYS:
+        label = _DAYS_LABELS.get(d, f"{d} дн.")
+        count = sent_by_days[d]
+        ids = sent_ids_by_days.get(d, [])
+        if ids:
+            ids_str = ", ".join(str(tid) for tid in ids)
+            breakdown_lines.append(f"  • {label}: {count} → {ids_str}")
+        else:
+            breakdown_lines.append(f"  • {label}: {count}")
+    breakdown = "\n".join(breakdown_lines)
     report = (
         f"🔔 Уведомления {datetime.now(UTC).strftime('%d.%m.%Y %H:%M')}\n"
         f"📬 Отправлено: {total}\n"
